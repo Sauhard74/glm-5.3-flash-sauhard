@@ -1,0 +1,236 @@
+[
+  {
+    "config": "plain",
+    "per_prompt": {
+      "code": {
+        "gen_tps": 13.1,
+        "prompt_tps": 19.6,
+        "gen_tokens": 56,
+        "wall_s": 6.38,
+        "peak_gb": 47.7,
+        "head": "I'll implement an LRU cache with O(1) operations, thread safety, and TTL support"
+      },
+      "refactor": {
+        "gen_tps": 29.1,
+        "prompt_tps": 110.5,
+        "gen_tokens": 320,
+        "wall_s": 11.63,
+        "peak_gb": 47.9,
+        "head": "Here's the refactored code with async support, proper error handling, and retry "
+      },
+      "agentic": {
+        "gen_tps": 33.5,
+        "prompt_tps": 114.3,
+        "gen_tokens": 72,
+        "wall_s": 2.66,
+        "peak_gb": 47.9,
+        "head": "I'll help you diagnose this issue. Let me first look at the code to understand t"
+      },
+      "reasoning": {
+        "gen_tps": 29.6,
+        "prompt_tps": 107.4,
+        "gen_tokens": 320,
+        "wall_s": 11.45,
+        "peak_gb": 47.9,
+        "head": "To determine when and where the second train catches the first, we must analyze "
+      }
+    },
+    "mean_gen_tps": 26.3,
+    "peak_gb": 47.9
+  },
+  {
+    "config": "mtp-auto",
+    "per_prompt": {
+      "code": {
+        "gen_tps": 18.5,
+        "prompt_tps": 208.1,
+        "gen_tokens": 56,
+        "wall_s": 3.23,
+        "peak_gb": 48.4,
+        "head": "I'll implement an LRU cache with O(1) operations, thread safety, and TTL support"
+      },
+      "refactor": {
+        "gen_tps": 57.7,
+        "prompt_tps": 240.1,
+        "gen_tokens": 320,
+        "wall_s": 5.84,
+        "peak_gb": 48.4,
+        "head": "Here's the refactored code with async support, proper error handling, and retry "
+      },
+      "agentic": {
+        "gen_tps": 62.3,
+        "prompt_tps": 339.6,
+        "gen_tokens": 72,
+        "wall_s": 1.33,
+        "peak_gb": 48.4,
+        "head": "I'll help you diagnose this issue. Let me first look at the code to understand t"
+      },
+      "reasoning": {
+        "gen_tps": 58.7,
+        "prompt_tps": 344.7,
+        "gen_tokens": 320,
+        "wall_s": 5.65,
+        "peak_gb": 48.4,
+        "head": "To determine when and where the second train catches the first, we must analyze "
+      }
+    },
+    "mean_gen_tps": 49.3,
+    "peak_gb": 48.4
+  },
+  {
+    "config": "mtp-b2",
+    "per_prompt": {
+      "code": {
+        "gen_tps": 58.8,
+        "prompt_tps": 281.1,
+        "gen_tokens": 56,
+        "wall_s": 1.1,
+        "peak_gb": 48.4,
+        "head": "I'll implement an LRU cache with O(1) operations, thread safety, and TTL support"
+      },
+      "refactor": {
+        "gen_tps": 58.8,
+        "prompt_tps": 347.4,
+        "gen_tokens": 320,
+        "wall_s": 5.64,
+        "peak_gb": 48.4,
+        "head": "Here's the refactored code with async support, proper error handling, and retry "
+      },
+      "agentic": {
+        "gen_tps": 57.4,
+        "prompt_tps": 327.7,
+        "gen_tokens": 72,
+        "wall_s": 1.44,
+        "peak_gb": 48.4,
+        "head": "I'll help you diagnose this issue. Let me first look at the code to understand t"
+      },
+      "reasoning": {
+        "gen_tps": 40.9,
+        "prompt_tps": 314.2,
+        "gen_tokens": 320,
+        "wall_s": 8.04,
+        "peak_gb": 48.4,
+        "head": "To determine when and where the second train catches the first, we must analyze "
+      }
+    },
+    "mean_gen_tps": 54.0,
+    "peak_gb": 48.4
+  },
+  {
+    "config": "mtp-b3",
+    "per_prompt": {
+      "code": {
+        "gen_tps": 44.7,
+        "prompt_tps": 208.8,
+        "gen_tokens": 56,
+        "wall_s": 1.45,
+        "peak_gb": 48.4,
+        "head": "I'll implement an LRU cache with O(1) operations, thread safety, and TTL support"
+      },
+      "refactor": {
+        "gen_tps": 47.3,
+        "prompt_tps": 307.9,
+        "gen_tokens": 320,
+        "wall_s": 6.99,
+        "peak_gb": 48.4,
+        "head": "Here's the refactored code with async support, proper error handling, and retry "
+      },
+      "agentic": {
+        "gen_tps": 30.9,
+        "prompt_tps": 285.8,
+        "gen_tokens": 72,
+        "wall_s": 2.54,
+        "peak_gb": 48.4,
+        "head": "I'll help you diagnose this issue. Let me first look at the code to understand t"
+      },
+      "reasoning": {
+        "gen_tps": 49.5,
+        "prompt_tps": 269.4,
+        "gen_tokens": 320,
+        "wall_s": 6.72,
+        "peak_gb": 48.4,
+        "head": "To determine when and where the second train catches the first, we must analyze "
+      }
+    },
+    "mean_gen_tps": 43.1,
+    "peak_gb": 48.4
+  },
+  {
+    "config": "mtp-b5",
+    "per_prompt": {
+      "code": {
+        "gen_tps": 33.6,
+        "prompt_tps": 242.8,
+        "gen_tokens": 56,
+        "wall_s": 1.85,
+        "peak_gb": 48.6,
+        "head": "I'll implement an LRU cache with O(1) operations, thread safety, and TTL support"
+      },
+      "refactor": {
+        "gen_tps": 54.6,
+        "prompt_tps": 289.9,
+        "gen_tokens": 320,
+        "wall_s": 6.11,
+        "peak_gb": 48.6,
+        "head": "Here's the refactored code with async support, proper error handling, and retry "
+      },
+      "agentic": {
+        "gen_tps": 38.8,
+        "prompt_tps": 191.0,
+        "gen_tokens": 72,
+        "wall_s": 2.17,
+        "peak_gb": 48.6,
+        "head": "I'll help you diagnose this issue. Let me first look at the code to understand t"
+      },
+      "reasoning": {
+        "gen_tps": 35.4,
+        "prompt_tps": 186.7,
+        "gen_tokens": 320,
+        "wall_s": 9.42,
+        "peak_gb": 48.6,
+        "head": "To determine when and where the second train catches the first, we must analyze "
+      }
+    },
+    "mean_gen_tps": 40.6,
+    "peak_gb": 48.6
+  },
+  {
+    "config": "mtp-b6",
+    "per_prompt": {
+      "code": {
+        "gen_tps": 13.8,
+        "prompt_tps": 171.7,
+        "gen_tokens": 56,
+        "wall_s": 4.34,
+        "peak_gb": 48.8,
+        "head": "I'll implement an LRU cache with O(1) operations, thread safety, and TTL support"
+      },
+      "refactor": {
+        "gen_tps": 26.5,
+        "prompt_tps": 212.1,
+        "gen_tokens": 320,
+        "wall_s": 12.44,
+        "peak_gb": 48.9,
+        "head": "Here's the refactored code with async support, proper error handling, and retry "
+      },
+      "agentic": {
+        "gen_tps": 30.6,
+        "prompt_tps": 212.6,
+        "gen_tokens": 72,
+        "wall_s": 2.64,
+        "peak_gb": 48.9,
+        "head": "I'll help you diagnose this issue. Let me first look at the code to understand t"
+      },
+      "reasoning": {
+        "gen_tps": 30.5,
+        "prompt_tps": 210.0,
+        "gen_tokens": 320,
+        "wall_s": 10.83,
+        "peak_gb": 48.9,
+        "head": "To determine when and where the second train catches the first, we must analyze "
+      }
+    },
+    "mean_gen_tps": 25.4,
+    "peak_gb": 48.9
+  }
+]

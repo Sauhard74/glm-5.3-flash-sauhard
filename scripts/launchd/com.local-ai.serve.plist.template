@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Per-user LaunchAgent for the local-ai server. Rendered by scripts/launchd/install.sh,
+  which substitutes @REPO@, @UV_DIR@, @MODEL@, @PORT@, @MEMORY_LIMIT_GB@, @IDLE_UNLOAD_S@.
+  The process stays up; the model itself unloads after the idle timeout and reloads
+  on the next request, so the agent costs little memory while unused.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.local-ai.serve</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>@REPO@/scripts/serve.sh</string>
+    <string>@MODEL@</string>
+    <string>--port</string>
+    <string>@PORT@</string>
+    <string>--memory-limit-gb</string>
+    <string>@MEMORY_LIMIT_GB@</string>
+    <string>--idle-unload-s</string>
+    <string>@IDLE_UNLOAD_S@</string>
+    <string>--no-preload</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>@UV_DIR@:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>ProcessType</key>
+  <string>Standard</string>
+
+  <key>StandardOutPath</key>
+  <string>@REPO@/logs/serve.log</string>
+  <key>StandardErrorPath</key>
+  <string>@REPO@/logs/serve.log</string>
+</dict>
+</plist>

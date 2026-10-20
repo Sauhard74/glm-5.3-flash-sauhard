@@ -1,0 +1,4 @@
+{"id": "aime24/fx0", "dataset": "aime24", "problem": "Find the remainder when $2^{10}$ is divided by $1000$.", "answer": "24"}
+{"id": "aime25/fx0", "dataset": "aime25", "problem": "How many positive divisors does $360$ have?", "answer": "24"}
+{"id": "math500/fx0", "dataset": "math500", "problem": "Simplify $\\frac{6}{8}$.", "answer": "\\frac{3}{4}", "subject": "Prealgebra", "level": 1}
+{"id": "math500/fx1", "dataset": "math500", "problem": "Convert the point $(0,3)$ in rectangular coordinates to polar coordinates.", "answer": "\\left( 3, \\frac{\\pi}{2} \\right)", "subject": "Precalculus", "level": 2}

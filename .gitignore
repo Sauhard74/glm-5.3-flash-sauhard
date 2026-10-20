@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+logs/
+artifacts/
+models/
+control/state.json
+control/state.tmp
+control/server.pid
+results/*/
+.pytest_cache/
+tests/fixtures/tokenizers/
