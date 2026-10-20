@@ -31,6 +31,9 @@ if API_KEY:
         supplied = request.headers.get("x-api-key") or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
         if not secrets.compare_digest(supplied, API_KEY):
             return JSONResponse({"error": {"type": "authentication_error", "message": "invalid api key"}}, status_code=401)
+        # mlx-vlm's own management check only reads Authorization; mirror a valid x-api-key into it.
+        if not request.headers.get("authorization"):
+            request.scope["headers"] = [*request.scope["headers"], (b"authorization", f"Bearer {API_KEY}".encode())]
         return await call_next(request)
 
 main()
