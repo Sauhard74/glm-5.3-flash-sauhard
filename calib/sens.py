@@ -9,7 +9,7 @@ import mlx.core as mx
 import numpy as np
 
 BITS = (2, 3, 4, 5, 6, 8)
-GROUPS = (32, 64)
+GROUPS = (32, 64, 128)
 
 
 def grid_key(bits, group):

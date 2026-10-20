@@ -130,4 +130,23 @@ def test_fill_sensitivities_kind_median_and_proxy():
     assert b.sens_source == "median:expert" and b.sens[(4, 64)] == pytest.approx(0.2)
     assert c.sens_source == "proxy"
     assert all(c.sens[(bb, 64)] > c.sens[(bb + 1, 64)] for bb in (2, 3, 4, 5))
-    assert len(a.sens) == 12
+    assert len(a.sens) == len(alloc.DEFAULT_BITS) * len(alloc.DEFAULT_GROUPS)
+
+
+def test_group128_bytes_and_choice_under_tight_budget():
+    numel, d = 2048 * 4096, 4096
+    # 3-bit: g64 pays 0.5 bpw of scale/bias overhead, g128 pays 0.25
+    assert alloc.quantized_bytes(numel, d, 3, 128) < alloc.quantized_bytes(numel, d, 3, 64)
+    assert alloc.quantized_bytes(numel, d, 3, 128) * 8 / numel == pytest.approx(3.25)
+    u = alloc.Unit("main", "l.0.mlp.switch_mlp.up_proj", (2048, 4096), 2, "expert", "0")
+    sens = {(b, g): 2.0 ** -b * (1 + g / 256) for b in alloc.DEFAULT_BITS for g in alloc.DEFAULT_GROUPS}
+    opts = alloc.unit_options(u, u.shape, sens, allow_bf16=False)
+    budget = alloc.quantized_bytes(numel, d, 3, 128)
+    sol = alloc.solve([opts], budget)
+    assert sol is not None and (sol.choices[0].bits, sol.choices[0].group) == (3, 128)
+
+
+def test_group128_skipped_when_not_divisible():
+    u = alloc.Unit("main", "l.0.linear_attn.a_proj", (32, 96), 2, "attn", "0")
+    sens = {(b, g): 1.0 / b for b in alloc.DEFAULT_BITS for g in alloc.DEFAULT_GROUPS}
+    assert all(o.group in (None, 32) for o in alloc.unit_options(u, u.shape, sens))

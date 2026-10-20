@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 BF16 = 16  # pseudo bit-width meaning "keep unquantized"
 DEFAULT_BITS = (2, 3, 4, 5, 6, 8)
-DEFAULT_GROUPS = (32, 64)
+DEFAULT_GROUPS = (32, 64, 128)
 
 
 def quantized_bytes(numel: int, in_dim: int, bits: int, group: int, scale_itemsize: int = 2) -> int:
