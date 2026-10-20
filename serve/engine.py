@@ -131,12 +131,17 @@ def _patch_mlx_vlm():
     rn._build_gen_args = build_gen_args
 
 
-def detect_mtp(model: str) -> bool:
-    """True when the checkpoint ships native MTP tensors mlx-vlm can draft with."""
+def detect_mtp(model: str) -> Optional[str]:
+    """Drafter path when the checkpoint ships an MTP head: bundled tensors, or the
+    `mtp/` drafter directory that build/ writes next to the main weights."""
     from mlx_vlm.speculative.drafters.mtp_split import detect_mtp_splitter
 
     path = Path(model).expanduser()
-    return path.is_dir() and detect_mtp_splitter(path) is not None
+    if not path.is_dir():
+        return None
+    if (path / "mtp" / "config.json").exists():
+        return str(path / "mtp")
+    return model if detect_mtp_splitter(path) is not None else None
 
 
 def resolve_draft_model(cfg: ServeConfig) -> Optional[str]:
@@ -144,8 +149,9 @@ def resolve_draft_model(cfg: ServeConfig) -> Optional[str]:
         return None
     if cfg.draft_model:
         return cfg.draft_model
-    if detect_mtp(cfg.model):
-        return cfg.model
+    drafter = detect_mtp(cfg.model)
+    if drafter:
+        return drafter
     if cfg.mtp == "on" and not Path(cfg.model).expanduser().is_dir():
         return cfg.model  # remote repo: mlx-vlm resolves its bundled head after download
     if cfg.mtp == "on":

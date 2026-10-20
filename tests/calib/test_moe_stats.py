@@ -54,7 +54,10 @@ def test_reap_and_freq_match_manual(tiny, arch_name):
             count[e] += 1
             gnorm[e] += w[t, k] * n
     assert np.array_equal(rec.count[0], count)
-    assert np.allclose(rec.gnorm[0], gnorm, rtol=2e-3)
+    # With >= 64 routed pairs SwitchGLU uses sorted gather_mm, which differs from this naive
+    # fp32 reference by a uniform ~0.2%; the probe records what the model actually computes.
+    assert np.allclose(rec.gnorm[0], gnorm, rtol=5e-3)
+    assert np.array_equal(np.argsort(-rec.gnorm[0]), np.argsort(-gnorm)), "REAP ranking must match"
     # every routed (token, expert) pair fits under the cap, so the samples are exact
     for e in range(E):
         got = rec.expert_res.rows[e]

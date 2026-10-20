@@ -70,7 +70,7 @@ served on `http://127.0.0.1:8080` (OpenAI + Anthropic APIs) by the launchd contr
 
 **Stopped mid-way (user request):** both multi-agent workflows.
 - Research: `docs/research/{quant,reap,decode,mac}.md` — complete and adversarially verified.
-- Modules `calib_data/ calib/ build/ evals/ serve/` — built by agents; calib/ and build/ were mid code-review, the others unreviewed. No end-to-end integration run yet. Treat as drafts: run their tests first.
+- Modules `calib_data/ calib/ build/ evals/ serve/` — built by agents, not yet independently reviewed. All tests pass, and `scripts/pipeline_tiny.sh` runs the full chain (make_tiny → calib_data → calib → build → evals kl/speed → serve dry-run) for **both** architectures on tiny real-arch checkpoints. Fixed while integrating: REAP test reference, serve MTP detection of build's `mtp/` drafter dir. Builds need `--drop-vision` for text-only use.
 - Master plan: chapter drafts in `docs/plan/` (unreviewed; some may be incomplete). `docs/MASTER_PLAN.md` was not yet synthesized.
 
 **Background downloads (survive session close):** `zai-org/GLM-5.3-Flash` then `Qwen/Qwen3.8-Flash-Next` into the HF cache (log: `logs/downloads.log`). Stop with `pkill -f "hf download"`; rerun the same `hf download` to resume.
