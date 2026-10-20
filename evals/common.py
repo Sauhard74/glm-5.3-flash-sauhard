@@ -98,6 +98,10 @@ def load_model(args, *, lazy: bool = False):
         )
     set_memory_limits(args.memory_limit_gb)
     mx.random.seed(args.seed)
+    # GLM's per-head projected prefill KV copy costs 22-24 GiB at >= 32K context; 0 is bit-exact (MASTER_PLAN R13).
+    import mlx_vlm.models.glm5_next.language as glm_lang
+
+    glm_lang._MAX_PROJECTED_PREFILL_TOKENS = 0
     model, processor = load(str(path), lazy=lazy)
     return model, processor
 

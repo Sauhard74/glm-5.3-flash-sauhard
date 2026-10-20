@@ -76,3 +76,31 @@ def test_self_reference_kl_is_near_zero(tiny_models, family, tmp_path):
         assert r["agree"].mean() > 0.9
         ref_nll = -np.nanmean(s["target_logprob"])
         assert abs(r["nll"].mean() - ref_nll) < 1e-2
+
+
+class _Tok:
+    def __init__(self, vocab):
+        self.vocab = vocab
+        self.inv = {v: k for k, v in vocab.items()}
+
+    def get_vocab(self):
+        return self.vocab
+
+    def decode(self, ids):
+        return "".join(self.inv[i] for i in ids)
+
+
+def test_position_roles_glm_markers():
+    from evals.kl import position_roles
+
+    tok = _Tok({"<|system|>": 1, "<|user|>": 2, "<|assistant|>": 3, "<|observation|>": 4, "x": 5})
+    roles = position_roles(np.array([5, 1, 5, 2, 5, 3, 5, 4, 5]), tok)
+    assert list(roles) == ["none", "system", "system", "user", "user", "assistant", "assistant", "tool", "tool"]
+
+
+def test_position_roles_chatml():
+    from evals.kl import position_roles
+
+    tok = _Tok({"<|im_start|>": 1, "user": 2, "assistant": 3, "\n": 4, "x": 5})
+    roles = position_roles(np.array([1, 2, 4, 5, 1, 3, 4, 5]), tok)
+    assert list(roles) == ["none", "user", "user", "user", "user", "assistant", "assistant", "assistant"]

@@ -94,6 +94,31 @@ def eval_sample(model, s: Dict[str, Any], chunk: int) -> Dict[str, np.ndarray]:
     return {"kl": np.concatenate(kls), "agree": np.concatenate(agrees), "nll": np.concatenate(nlls)}
 
 
+ROLE_MARKERS = {  # GLM-style single-token role markers
+    "<|system|>": "system", "<|user|>": "user", "<|assistant|>": "assistant", "<|observation|>": "tool",
+}
+ROLES = ("system", "user", "assistant", "tool")
+
+
+def position_roles(tokens: np.ndarray, tokenizer) -> np.ndarray:
+    """Chat role in effect at each position (predicting token i+1 from position i), from the last
+    role marker: GLM ``<|user|>``-style tokens, or ChatML ``<|im_start|>role``. "none" before any."""
+    vocab = tokenizer.get_vocab() if tokenizer is not None else {}
+    single = {vocab[t]: r for t, r in ROLE_MARKERS.items() if t in vocab}
+    im_start = vocab.get("<|im_start|>")
+    roles = np.full(len(tokens), "none", dtype=object)
+    cur = "none"
+    for i, t in enumerate(tokens):
+        t = int(t)
+        if t in single:
+            cur = single[t]
+        elif im_start is not None and i > 0 and int(tokens[i - 1]) == im_start:
+            name = tokenizer.decode([t]).strip()
+            cur = {"observation": "tool"}.get(name, name if name in ROLES else "none")
+        roles[i] = cur
+    return roles
+
+
 def summarize(kl: np.ndarray, agree: np.ndarray, nll: np.ndarray, ref_nll: np.ndarray) -> Dict[str, Any]:
     out = {
         "tokens": int(kl.size),
@@ -163,7 +188,8 @@ def main(argv=None):
     model, processor = load_model(args)
     ref_dir = Path(args.ref or f"artifacts/{family}/calib/ref")
     tmp = None
-    if args.smoke and not (ref_dir / "index.json").exists():
+    # Smoke runs use a self-reference: a real calib ref for this family belongs to the full model, not the tiny one.
+    if args.smoke and not args.ref:
         tmp = tempfile.TemporaryDirectory(prefix="evals-kl-smoke-")
         ref_dir = write_self_ref(model, smoke_samples(getattr(processor, "tokenizer", processor)), Path(tmp.name))
         args.chunk = min(args.chunk, 128)
@@ -171,10 +197,18 @@ def main(argv=None):
         raise SystemExit(f"no reference at {ref_dir}/index.json (run calib, or pass --ref)")
     index_meta = {k: v for k, v in load_ref_index(ref_dir).items() if k != "samples"}
 
+    tokenizer = getattr(processor, "tokenizer", processor)
     per_domain: Dict[str, Dict[str, List[np.ndarray]]] = {}
+    per_role: Dict[str, Dict[str, List[np.ndarray]]] = {}
     samples = []
     for n, s in enumerate(iter_ref(ref_dir, args.limit)):
         r = eval_sample(model, s, args.chunk)
+        roles = position_roles(s["tokens"][: len(r["kl"])], tokenizer)
+        for role in set(roles):
+            m = roles == role
+            pr = per_role.setdefault(role, {"kl": [], "agree": []})
+            pr["kl"].append(r["kl"][m])
+            pr["agree"].append(r["agree"][m])
         d = per_domain.setdefault(s["domain"], {"kl": [], "agree": [], "nll": [], "ref_nll": []})
         d["kl"].append(r["kl"])
         d["agree"].append(r["agree"])
@@ -198,6 +232,13 @@ def main(argv=None):
     summary["macro_top1_agree"] = mean(b["top1_agree"] for b in breakdown.values() if b["top1_agree"] is not None)
     for dom, b in breakdown.items():
         summary[f"{dom}_kl"] = b["mean_kl"]
+    # Assistant positions are what the model generates; prompt/tool positions measure how it reads context.
+    for role, v in per_role.items():
+        kl, agree = cat(v["kl"]), cat(v["agree"])
+        if kl.size:
+            summary[f"{role}_tokens"] = int(kl.size)
+            summary[f"{role}_kl"] = float(kl.mean())
+            summary[f"{role}_top1"] = float(agree.mean())
     summary["samples"] = len(samples)
     summary["headline"] = "mean_kl"
     settings = {"ref": str(ref_dir) if tmp is None else "self (smoke)", "chunk": args.chunk, "ref_meta": index_meta}
