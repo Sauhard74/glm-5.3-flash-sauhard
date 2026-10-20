@@ -10,3 +10,5 @@ control/server.pid
 results/*/
 .pytest_cache/
 tests/fixtures/tokenizers/
+control/control_token
+control/api_key

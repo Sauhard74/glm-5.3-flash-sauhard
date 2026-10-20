@@ -6,17 +6,18 @@ Run under launchd (scripts/install-control.sh). Dashboard: http://127.0.0.1:8090
 import json
 import os
 import re
+import secrets
 import signal
 import subprocess
 import threading
 import time
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import psutil
 import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +26,22 @@ PID_FILE = ROOT / "control" / "server.pid"
 SERVER_LOG = ROOT / "logs" / "server.log"
 DASHBOARD = ROOT / "control" / "dashboard.html"
 GB = 1 << 30
+CONTROL_PORT = int(os.environ.get("CONTROL_PORT", "8090"))
+ALLOWED_HOSTS = {f"127.0.0.1:{CONTROL_PORT}", f"localhost:{CONTROL_PORT}"}
+ALLOWED_ORIGINS = {f"http://{h}" for h in ALLOWED_HOSTS}
+
+
+def _secret(name: str) -> str:
+    """Per-install secret stored mode 0600 next to the daemon (gitignored)."""
+    path = ROOT / "control" / name
+    if not path.exists():
+        path.write_text(secrets.token_urlsafe(32))
+        path.chmod(0o600)
+    return path.read_text().strip()
+
+
+CONTROL_TOKEN = _secret("control_token")
+MODEL_API_KEY = _secret("api_key")
 
 DEFAULTS = {
     "desired": "stopped",
@@ -80,8 +97,10 @@ def server_tree_rss(p: psutil.Process) -> int:
 
 
 def api_ready(port: int) -> bool:
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/models",
+                                 headers={"Authorization": f"Bearer {MODEL_API_KEY}"})
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=1.5) as r:
+        with urllib.request.urlopen(req, timeout=1.5) as r:
             return r.status == 200
     except Exception:
         return False
@@ -100,6 +119,7 @@ def start_server() -> None:
             "CAP_GB": str(s["cap_gb"]),
             "PREFILL": str(s["prefill"]),
             "PORT": str(s["port"]),
+            "MLX_VLM_SERVER_API_KEY": MODEL_API_KEY,
         }
         SERVER_LOG.parent.mkdir(exist_ok=True)
         log = open(SERVER_LOG, "ab")
@@ -127,16 +147,25 @@ def stop_server() -> None:
         p = server_proc()
         if not p:
             return
+        group = [p]
         try:
-            group = [p] + p.children(recursive=True)
-            parents = [q for q in p.parents() if "uv" in q.name() or "quickserve" in " ".join(q.cmdline())]
-            for q in group + parents:
-                q.send_signal(signal.SIGTERM)
-            _, alive = psutil.wait_procs(group, timeout=20)
-            for q in alive:
-                q.kill()
+            group += p.children(recursive=True)
+            parent = p.parent()
+            if parent is not None and parent.name() == "uv":
+                group.append(parent)
         except psutil.Error:
             pass
+        for q in group:
+            try:
+                q.send_signal(signal.SIGTERM)
+            except psutil.Error:
+                pass
+        _, alive = psutil.wait_procs(group, timeout=20)
+        for q in alive:
+            try:
+                q.kill()
+            except psutil.Error:
+                pass
         PID_FILE.unlink(missing_ok=True)
         started_at = None
 
@@ -226,6 +255,27 @@ def supervisor() -> None:
 app = FastAPI()
 
 
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    # Host check defeats DNS rebinding; Origin + token header defeat cross-site requests from browser pages.
+    if request.headers.get("host") not in ALLOWED_HOSTS:
+        return JSONResponse({"detail": "bad host"}, status_code=403)
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in ALLOWED_ORIGINS:
+        return JSONResponse({"detail": "bad origin"}, status_code=403)
+    if request.url.path.startswith("/api/") and not secrets.compare_digest(
+        request.headers.get("x-control-token", ""), CONTROL_TOKEN
+    ):
+        return JSONResponse({"detail": "missing control token"}, status_code=403)
+    return await call_next(request)
+
+
+def valid_model_path(model: str) -> bool:
+    p = PurePosixPath(model)
+    return (len(p.parts) == 2 and p.parts[0] == "models" and p.parts[1] not in ("..", ".")
+            and (ROOT / p / "config.json").exists())
+
+
 class Settings(BaseModel):
     model: str | None = None
     mtp: bool | None = None
@@ -237,7 +287,7 @@ class Settings(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    return DASHBOARD.read_text()
+    return DASHBOARD.read_text().replace("__CONTROL_TOKEN__", CONTROL_TOKEN)
 
 
 @app.get("/api/status")
@@ -272,8 +322,8 @@ def api_restart():
 def api_settings(body: Settings):
     s = load_state()
     upd = body.model_dump(exclude_none=True)
-    if "model" in upd and not (ROOT / upd["model"] / "config.json").exists():
-        raise HTTPException(400, f"no model at {upd['model']}")
+    if "model" in upd and not valid_model_path(upd["model"]):
+        raise HTTPException(400, "model must be models/<name> containing config.json")
     if "cap_gb" in upd and not 40 <= upd["cap_gb"] <= 110:
         raise HTTPException(400, "cap_gb must be 40-110")
     if "draft_block" in upd and not 1 <= upd["draft_block"] <= 8:
@@ -292,4 +342,4 @@ def api_models():
 
 if __name__ == "__main__":
     threading.Thread(target=supervisor, daemon=True).start()
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("CONTROL_PORT", "8090")), log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=CONTROL_PORT, log_level="warning")

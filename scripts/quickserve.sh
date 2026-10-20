@@ -8,6 +8,7 @@ MODEL="${1:-models/qwen-flash-next-reap288}"
 export CAP_GB="${CAP_GB:-80}" WIRE_GB="${WIRE_GB:-0}" CACHE_GB="${CACHE_GB:-2}"
 export APC_ENABLED=1 APC_MEMORY_MAX_GB="${APC_MEMORY_MAX_GB:-6}" APC_DISK_MAX_GB="${APC_DISK_MAX_GB:-40}"
 export APC_CHECKPOINT_ENTRIES=2 HF_HUB_OFFLINE=1
+[[ -z "${MLX_VLM_SERVER_API_KEY:-}" && -f control/api_key ]] && export MLX_VLM_SERVER_API_KEY="$(cat control/api_key)"
 
 DRAFT_ARGS=()
 if [[ "${MTP:-1}" == "1" ]]; then

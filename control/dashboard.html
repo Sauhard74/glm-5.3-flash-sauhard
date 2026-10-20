@@ -141,6 +141,7 @@
 <div class="toast" id="toast"></div>
 <script>
 const $ = (id) => document.getElementById(id);
+const AUTH = { "x-control-token": "__CONTROL_TOKEN__" };
 let settingsLoaded = false, busy = false;
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
@@ -148,7 +149,7 @@ function fmtUptime(s) { if (!s) return "—"; const h = Math.floor(s / 3600), m 
 const LABEL = { running: "Running", loading: "Loading…", starting: "Starting…", stopped: "Stopped" };
 
 async function post(path, body) {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", ...AUTH }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.detail || r.statusText);
   return j;
@@ -156,7 +157,7 @@ async function post(path, body) {
 
 async function refresh() {
   let s;
-  try { s = await (await fetch("/api/status")).json(); } catch { $("phase").textContent = "Control offline"; return; }
+  try { s = await (await fetch("/api/status", { headers: AUTH })).json(); } catch { $("phase").textContent = "Control offline"; return; }
   const ph = s.phase;
   $("pill").className = "pill " + ph; $("phase").textContent = LABEL[ph] || ph;
   $("model").textContent = s.settings.model;
@@ -186,7 +187,7 @@ async function refresh() {
   $("log").textContent = (st.log_tail || []).map(l => l.length > 220 ? l.slice(0, 220) + "…" : l).join("\n");
 
   if (!settingsLoaded) {
-    const models = (await (await fetch("/api/models")).json()).models;
+    const models = (await (await fetch("/api/models", { headers: AUTH })).json()).models;
     $("s-model").innerHTML = models.map(x => `<option ${x === s.settings.model ? "selected" : ""}>${x}</option>`).join("");
     $("s-mtp").checked = s.settings.mtp; $("s-block").value = s.settings.draft_block;
     $("s-cap").value = s.settings.cap_gb; $("s-prefill").value = s.settings.prefill; $("s-awake").checked = s.settings.keep_awake;

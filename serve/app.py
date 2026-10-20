@@ -6,7 +6,6 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
@@ -155,6 +154,6 @@ def create_app(cfg: ServeConfig, engine: Engine = None) -> FastAPI:
     )
 
     app.add_middleware(ActivityMiddleware, engine=engine)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    # No CORS: browsers on other origins must not reach a local model; CLI/agent clients don't need it.
     app.state.engine = engine
     return app
