@@ -34,9 +34,15 @@ ALLOWED_ORIGINS = {f"http://{h}" for h in ALLOWED_HOSTS}
 def _secret(name: str) -> str:
     """Per-install secret stored mode 0600 next to the daemon (gitignored)."""
     path = ROOT / "control" / name
-    if not path.exists():
-        path.write_text(secrets.token_urlsafe(32))
-        path.chmod(0o600)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_urlsafe(32))
+    except FileExistsError:
+        pass
+    st = path.lstat()
+    if st.st_uid != os.getuid() or st.st_mode & 0o077 or not path.is_file() or path.is_symlink():
+        raise SystemExit(f"{path} must be a regular file owned by you with mode 0600")
     return path.read_text().strip()
 
 
