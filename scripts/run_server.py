@@ -19,6 +19,12 @@ mx.set_cache_limit(int(float(os.environ.get("CACHE_GB", "2")) * GB))
 
 import secrets  # noqa: E402
 
+# GLM keeps a per-head projected KV copy during prefill (22-24 GiB extra at >= 32K context).
+# 0 disables it; verified bit-exact in docs/research/decode.md (Rec 1, MASTER_PLAN R13).
+import mlx_vlm.models.glm5_next.language as _glm_lang  # noqa: E402
+
+_glm_lang._MAX_PROJECTED_PREFILL_TOKENS = int(os.environ.get("GLM_MAX_PROJECTED_PREFILL", "0"))
+
 from mlx_vlm.server import app as server_app  # noqa: E402
 from mlx_vlm.server.cli import main  # noqa: E402
 from starlette.responses import JSONResponse  # noqa: E402

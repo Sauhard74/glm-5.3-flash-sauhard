@@ -1,0 +1,24 @@
+{
+  "qwen": {
+    "name": "Qwen3.8-Flash-Next 180B",
+    "detail": "REAP-288 experts, 4-bit, MTP drafter. Fastest; best for agent loops.",
+    "model": "models/qwen-flash-next-reap288",
+    "drafter": "models/qwen-flash-next-mtp-drafter",
+    "mtp": true,
+    "draft_block": 2,
+    "cap_gb": 80,
+    "prefill": 2048,
+    "expected_gb": 48
+  },
+  "glm": {
+    "name": "GLM-5.3-Flash 321B",
+    "detail": "Custom-calibrated on your workloads (REAP pruning + mixed precision). Highest quality.",
+    "model": "models/glm-5.3-flash-custom",
+    "drafter": "",
+    "mtp": true,
+    "draft_block": 3,
+    "cap_gb": 84,
+    "prefill": 2048,
+    "expected_gb": 78
+  }
+}

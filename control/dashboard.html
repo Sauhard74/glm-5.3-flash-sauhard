@@ -60,6 +60,17 @@
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
     padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: .92; }
+  .models { display: grid; gap: 10px; }
+  .mrow { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+  .mrow.on { border-color: var(--ok); }
+  .mname { font-weight: 650; }
+  .mdetail { color: var(--muted); font-size: 13px; }
+  .mmeta { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); margin-left: 6px; vertical-align: 1px; }
+  .tag.ok { color: var(--ok); border-color: currentColor; }
+  .tag.warn { color: var(--warn); border-color: currentColor; }
+  .mrow .controls { justify-content: flex-end; }
+  .mrow button { padding: 7px 14px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -73,6 +84,11 @@
   </header>
 
   <div class="grid">
+    <section class="card wide">
+      <h2>Models</h2>
+      <div class="models" id="models"></div>
+      <div class="note">One model runs at a time so the rest of the Mac stays free; starting another switches over. "Fits" means it fits in free memory with 8 GB to spare.</div>
+    </section>
     <section class="card">
       <h2>Power</h2>
       <div class="controls">
@@ -113,14 +129,14 @@
 
     <section class="card">
       <h2>Settings</h2>
-      <label>Model <select id="s-model"></select></label>
+      <label>Profile <select id="s-profile"></select></label>
       <label>MTP speculative decoding <input type="checkbox" id="s-mtp"></label>
       <label>Draft block size <input type="number" id="s-block" min="1" max="8"></label>
       <label>Memory cap (GB) <input type="number" id="s-cap" min="40" max="110" step="5"></label>
       <label>Prefill chunk <input type="number" id="s-prefill" min="512" max="8192" step="512"></label>
       <label>Keep Mac awake while running <input type="checkbox" id="s-awake"></label>
       <div class="controls" style="margin-top:8px"><button id="save">Save &amp; apply</button></div>
-      <div class="note">Model settings apply on restart. Keep-awake stops idle sleep and, on power, system sleep. Closing the lid on battery still sleeps the Mac; the model pauses and resumes on wake.</div>
+      <div class="note">Edits the selected profile; the running model restarts to apply. Keep-awake stops idle sleep and, on power, system sleep. Closing the lid on battery still sleeps the Mac; the model pauses and resumes on wake.</div>
     </section>
 
     <section class="card wide">
@@ -142,7 +158,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const AUTH = { "x-control-token": "__CONTROL_TOKEN__" };
-let settingsLoaded = false, busy = false;
+let busy = false, profiles = [], editing = null;
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
 function fmtUptime(s) { if (!s) return "—"; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`; }
@@ -186,14 +202,47 @@ async function refresh() {
   $("err").textContent = st.error && ph !== "running" ? st.error : "";
   $("log").textContent = (st.log_tail || []).map(l => l.length > 220 ? l.slice(0, 220) + "…" : l).join("\n");
 
-  if (!settingsLoaded) {
-    const models = (await (await fetch("/api/models", { headers: AUTH })).json()).models;
-    $("s-model").innerHTML = models.map(x => `<option ${x === s.settings.model ? "selected" : ""}>${x}</option>`).join("");
-    $("s-mtp").checked = s.settings.mtp; $("s-block").value = s.settings.draft_block;
-    $("s-cap").value = s.settings.cap_gb; $("s-prefill").value = s.settings.prefill; $("s-awake").checked = s.settings.keep_awake;
-    settingsLoaded = true;
-  }
+  profiles = (await (await fetch("/api/profiles", { headers: AUTH })).json()).profiles;
+  renderModels(ph);
+  if (editing === null) { editing = s.active; $("s-awake").checked = s.settings.keep_awake; fillSettings(); }
+  $("s-profile").innerHTML = profiles.map(p => `<option value="${p.id}" ${p.id === editing ? "selected" : ""}>${p.name}</option>`).join("");
 }
+
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function renderModels(ph) {
+  $("models").innerHTML = profiles.map(p => {
+    const state = p.running ? (ph === "running" ? '<span class="tag ok">Running</span>' : '<span class="tag warn">Loading…</span>') : "";
+    const fit = !p.built ? '<span class="tag warn">Not built yet</span>' : (p.running ? "" : (p.fits ? '<span class="tag ok">Fits</span>' : '<span class="tag warn">Low memory</span>'));
+    const meta = [p.built ? `${p.disk_gb} GB on disk` : p.model, `~${p.expected_gb} GB in use`,
+                  p.mtp && (p.drafter_resolved || !p.built) ? `MTP block ${p.draft_block}` : "no MTP", `cap ${p.cap_gb} GB`].join(" · ");
+    const btn = p.running
+      ? `<button class="danger" data-act="stop">Stop</button>`
+      : `<button class="primary" data-act="start" data-id="${p.id}" ${!p.built || busy ? "disabled" : ""}>${ph !== "stopped" ? "Switch to this" : "Start"}</button>`;
+    return `<div class="mrow ${p.running ? "on" : ""}"><div><div class="mname">${esc(p.name)}${state}${fit}</div>
+      <div class="mdetail">${esc(p.detail || "")}</div><div class="mmeta">${esc(meta)}</div></div>
+      <div class="controls">${btn}</div></div>`;
+  }).join("");
+}
+
+function fillSettings() {
+  const p = profiles.find(x => x.id === editing); if (!p) return;
+  $("s-mtp").checked = p.mtp; $("s-block").value = p.draft_block; $("s-cap").value = p.cap_gb; $("s-prefill").value = p.prefill;
+}
+
+$("models").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.act === "stop") return act("/api/stop", "Model stopped, memory freed");
+  busy = true; refresh();
+  try { await post("/api/start", { profile: b.dataset.id }); toast("Starting…"); }
+  catch (err) {
+    if (/force/.test(err.message) && confirm(err.message + "\n\nStart anyway?")) {
+      try { await post("/api/start", { profile: b.dataset.id, force: true }); toast("Starting…"); } catch (e2) { toast("Error: " + e2.message); }
+    } else toast("Error: " + err.message);
+  }
+  busy = false; refresh();
+};
+$("s-profile").onchange = () => { editing = $("s-profile").value; fillSettings(); };
 
 async function act(path, msg) {
   busy = true; refresh();
@@ -206,11 +255,10 @@ $("restart").onclick = () => act("/api/restart", "Restarting…");
 $("save").onclick = async () => {
   try {
     const r = await post("/api/settings", {
-      model: $("s-model").value, mtp: $("s-mtp").checked, draft_block: +$("s-block").value,
+      profile: editing, mtp: $("s-mtp").checked, draft_block: +$("s-block").value,
       cap_gb: +$("s-cap").value, prefill: +$("s-prefill").value, keep_awake: $("s-awake").checked,
     });
-    const ph = $("phase").textContent;
-    if (r.restart_needed && ph !== "Stopped") { await post("/api/restart"); toast("Saved, restarting with new settings"); }
+    if (r.restart_needed) { await post("/api/restart"); toast("Saved, restarting with new settings"); }
     else toast("Saved");
   } catch (e) { toast("Error: " + e.message); }
   refresh();

@@ -3,11 +3,13 @@
 Run under launchd (scripts/install-control.sh). Dashboard: http://127.0.0.1:8090
 """
 
+import ctypes
 import json
 import os
 import re
 import secrets
 import signal
+import struct
 import subprocess
 import threading
 import time
@@ -49,33 +51,59 @@ def _secret(name: str) -> str:
 CONTROL_TOKEN = _secret("control_token")
 MODEL_API_KEY = _secret("api_key")
 
-DEFAULTS = {
-    "desired": "stopped",
-    "model": "models/qwen-flash-next-reap288",
-    "mtp": True,
-    "draft_block": 2,
-    "cap_gb": 80,
-    "prefill": 2048,
-    "port": 8080,
-    "keep_awake": False,
-}
+PROFILES_FILE = ROOT / "control" / "profiles.json"
+PROFILE_KEYS = ("name", "detail", "model", "drafter", "mtp", "draft_block", "cap_gb", "prefill", "expected_gb")
+DEFAULTS = {"desired": "stopped", "active": "qwen", "port": 8080, "keep_awake": False, "overrides": {}}
+HEADROOM_GB = 8
 
 lock = threading.RLock()
 caffeinate: subprocess.Popen | None = None
 started_at: float | None = None
 
 
-def load_state() -> dict:
+def load_profiles(overrides: dict | None = None) -> dict:
+    """profiles.json (defaults, committed) with the user's dashboard edits from state.json on top."""
+    base = json.loads(PROFILES_FILE.read_text())
+    overrides = overrides if overrides is not None else _raw_state().get("overrides", {})
+    return {pid: {**p, **overrides.get(pid, {})} for pid, p in base.items()}
+
+
+def _raw_state() -> dict:
     try:
-        return {**DEFAULTS, **json.loads(STATE_FILE.read_text())}
+        raw = json.loads(STATE_FILE.read_text())
     except (OSError, ValueError):
-        return dict(DEFAULTS)
+        raw = {}
+    return {**DEFAULTS, **{k: v for k, v in raw.items() if k in DEFAULTS}}
+
+
+def load_state() -> dict:
+    """Persistent state plus the active profile's settings flattened in (model, mtp, ...)."""
+    s = _raw_state()
+    profiles = load_profiles(s["overrides"])
+    if s["active"] not in profiles:
+        s["active"] = next(iter(profiles))
+    return {**s, **profiles[s["active"]]}
 
 
 def save_state(state: dict) -> None:
     tmp = STATE_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=2))
+    tmp.write_text(json.dumps({k: state[k] for k in DEFAULTS}, indent=2))
     tmp.replace(STATE_FILE)
+
+
+def resolve_drafter(s: dict) -> str:
+    """Explicit drafter, else the `mtp/` drafter dir build/ writes next to the weights, else none."""
+    if s.get("drafter"):
+        return s["drafter"]
+    return f"{s['model']}/mtp" if (ROOT / s["model"] / "mtp" / "config.json").exists() else ""
+
+
+def model_disk_gb(model: str) -> float | None:
+    path = ROOT / model
+    if not (path / "config.json").exists():
+        return None
+    total = sum(f.stat().st_size for f in path.resolve().glob("*.safetensors"))
+    return round(total / 1e9, 1)
 
 
 def server_proc() -> psutil.Process | None:
@@ -94,10 +122,21 @@ def server_proc() -> psutil.Process | None:
     return None
 
 
+_libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
+
+
+def phys_footprint(pid: int) -> int:
+    """macOS phys_footprint (what Activity Monitor shows). Unlike RSS it counts MLX's Metal buffers."""
+    buf = ctypes.create_string_buffer(512)
+    if _libproc.proc_pid_rusage(pid, 2, buf) != 0:  # RUSAGE_INFO_V2
+        return 0
+    return struct.unpack_from("<Q", buf, 72)[0]  # uuid[16] + 7 u64 fields precede ri_phys_footprint
+
+
 def server_tree_rss(p: psutil.Process) -> int:
     try:
         procs = [p] + p.children(recursive=True)
-        return sum(c.memory_info().rss for c in procs if c.is_running())
+        return sum(phys_footprint(c.pid) for c in procs if c.is_running())
     except psutil.Error:
         return 0
 
@@ -118,9 +157,11 @@ def start_server() -> None:
         if server_proc():
             return
         s = load_state()
+        drafter = resolve_drafter(s)
         env = {
             **os.environ,
-            "MTP": "1" if s["mtp"] else "0",
+            "MTP": "1" if s["mtp"] and drafter else "0",
+            "DRAFTER": drafter,
             "DRAFT_BLOCK": str(s["draft_block"]),
             "CAP_GB": str(s["cap_gb"]),
             "PREFILL": str(s["prefill"]),
@@ -129,7 +170,7 @@ def start_server() -> None:
         }
         SERVER_LOG.parent.mkdir(exist_ok=True)
         log = open(SERVER_LOG, "ab")
-        log.write(f"\n===== control: start {time.ctime()} =====\n".encode())
+        log.write(f"\n===== control: start {s['active']} ({s['model']}) {time.ctime()} =====\n".encode())
         proc = subprocess.Popen(
             [str(ROOT / "scripts" / "quickserve.sh"), s["model"]],
             cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
@@ -232,7 +273,7 @@ def status() -> dict:
     else:
         phase = "running" if api_ready(s["port"]) else "loading"
     return {
-        "phase": phase, "desired": s["desired"], "settings": s,
+        "phase": phase, "desired": s["desired"], "settings": s, "active": s["active"],
         "pid": p.pid if p else None,
         "server_rss_gb": round(server_tree_rss(p) / GB, 1) if p else 0,
         "uptime_s": int(time.time() - p.create_time()) if p else 0,
@@ -283,12 +324,18 @@ def valid_model_path(model: str) -> bool:
 
 
 class Settings(BaseModel):
+    profile: str | None = None
     model: str | None = None
     mtp: bool | None = None
     draft_block: int | None = None
     cap_gb: int | None = None
     prefill: int | None = None
     keep_awake: bool | None = None
+
+
+class StartReq(BaseModel):
+    profile: str | None = None
+    force: bool = False
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -301,11 +348,53 @@ def api_status():
     return status()
 
 
+def profiles_view() -> list[dict]:
+    s = load_state()
+    p = server_proc()
+    running_gb = server_tree_rss(p) / GB if p else 0.0
+    avail = psutil.virtual_memory().available / GB
+    out = []
+    for pid, prof in load_profiles().items():
+        disk = model_disk_gb(prof["model"])
+        # memory the model could get: what's free now plus what the running model would release
+        room = avail + running_gb - HEADROOM_GB
+        out.append({
+            "id": pid, **prof, "built": disk is not None, "disk_gb": disk,
+            "drafter_resolved": resolve_drafter(prof) if disk is not None else "",
+            "active": pid == s["active"], "running": pid == s["active"] and p is not None,
+            "fits": prof["expected_gb"] <= room, "room_gb": round(room, 1),
+        })
+    return out
+
+
+@app.get("/api/profiles")
+def api_profiles():
+    return {"profiles": profiles_view()}
+
+
 @app.post("/api/start")
-def api_start():
-    s = load_state(); s["desired"] = "running"; save_state(s)
-    threading.Thread(target=start_server, daemon=True).start()
-    return {"ok": True}
+def api_start(body: StartReq | None = None):
+    body = body or StartReq()
+    s = load_state()
+    target = body.profile or s["active"]
+    view = {v["id"]: v for v in profiles_view()}
+    if target not in view:
+        raise HTTPException(404, f"unknown profile {target}")
+    if not view[target]["built"]:
+        raise HTTPException(409, f"{view[target]['name']} is not built yet ({view[target]['model']})")
+    if not view[target]["fits"] and not body.force:
+        raise HTTPException(409, f"needs ~{view[target]['expected_gb']} GB, only ~{view[target]['room_gb']} GB free "
+                                 f"after {HEADROOM_GB} GB headroom; close apps or force")
+    switching = target != s["active"]
+    s["active"], s["desired"] = target, "running"
+    save_state(s)
+
+    def go():
+        if switching:
+            stop_server()
+        start_server()
+    threading.Thread(target=go, daemon=True).start()
+    return {"ok": True, "switched": switching}
 
 
 @app.post("/api/stop")
@@ -328,22 +417,20 @@ def api_restart():
 def api_settings(body: Settings):
     s = load_state()
     upd = body.model_dump(exclude_none=True)
+    pid = upd.pop("profile", None) or s["active"]
+    if pid not in load_profiles():
+        raise HTTPException(404, f"unknown profile {pid}")
     if "model" in upd and not valid_model_path(upd["model"]):
         raise HTTPException(400, "model must be models/<name> containing config.json")
     if "cap_gb" in upd and not 40 <= upd["cap_gb"] <= 110:
         raise HTTPException(400, "cap_gb must be 40-110")
     if "draft_block" in upd and not 1 <= upd["draft_block"] <= 8:
         raise HTTPException(400, "draft_block must be 1-8")
-    s.update(upd)
+    if "keep_awake" in upd:
+        s["keep_awake"] = upd.pop("keep_awake")
+    s["overrides"] = {**s["overrides"], pid: {**s["overrides"].get(pid, {}), **upd}}
     save_state(s)
-    return {"ok": True, "restart_needed": any(k != "keep_awake" for k in upd)}
-
-
-@app.get("/api/models")
-def api_models():
-    models = sorted(str(p.parent.relative_to(ROOT)) for p in (ROOT / "models").glob("*/config.json")
-                    if "drafter" not in p.parent.name)
-    return {"models": models}
+    return {"ok": True, "restart_needed": bool(upd) and pid == s["active"] and server_proc() is not None}
 
 
 if __name__ == "__main__":
