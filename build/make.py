@@ -69,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ple-bits", type=int, default=4, help="Qwen PLE n-gram table bits (4 keeps mlx-vlm mmap PLE storage usable)")
     p.add_argument("--dtype", choices=["bfloat16", "float16", "float32"])
     p.add_argument("--shard-gb", type=float, default=2.0)
+    p.add_argument("--rounding", choices=["rtn", "lsq"], default="rtn",
+                   help="lsq: imatrix-weighted least-squares scale/bias refit with range search (docs/plan/05 §2.6a)")
+    p.add_argument("--lsq-iters", type=int, default=4)
     p.add_argument("--dry-run", action="store_true", help="plan + validate + print allocation, write nothing")
     p.add_argument("--summary-json", help="also write the summary JSON here")
     p.add_argument("-v", "--verbose", action="store_true")
@@ -107,6 +110,8 @@ def main(argv=None):
         dtype=args.dtype,
         shard_gb=args.shard_gb,
         dry_run=args.dry_run,
+        rounding=args.rounding,
+        lsq_iters=args.lsq_iters,
     )
     summary = Builder(opts).run()
     if args.summary_json:

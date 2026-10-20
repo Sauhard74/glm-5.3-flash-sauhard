@@ -199,3 +199,35 @@ def test_mixed_build_equals_inmemory_quantization(tiny, tmp_path, family):
         return (mx.linalg.norm((x - ref).reshape(-1)) / mx.linalg.norm(ref.reshape(-1))).item()
 
     assert rel(logits(load_model(q8_dir))) < rel(mixed)
+
+
+@pytest.mark.parametrize("family", FAMILIES)
+def test_lsq_rounding_same_layout_lower_error_and_uses_imatrix(tiny, tmp_path, family):
+    import shutil
+
+    from tests.fixtures.build_tiny import CONFIGS
+
+    t = tiny(family)
+    calib = tmp_path / "calib"
+    shutil.copytree(t["calib"], calib)
+    tc = CONFIGS[family]["text_config"]
+    E = tc["num_experts" if family == "qwen" else "n_routed_experts"]
+    rng = np.random.default_rng(0)
+    for i in range(tc["num_hidden_layers"]):  # calib-style per-expert input second moments
+        np.savez(calib / f"layer_{i:03d}.npz",
+                 **{"act_sqmean.mlp.switch_mlp.gate_proj": rng.gamma(1.0, 1.0, (E, tc["hidden_size"])).astype(np.float32)})
+    common = ["--model", family, "--calib", calib, "--prune", 0.5, "--mtp", "drop", "--budget-gb", 1,
+              "--pin", r"switch_mlp\.=3:32", "--pin", r"(experts|attn)\.=4:32"]
+    rtn = run(t["src"], tmp_path / "rtn", *common)
+    lsq = run(t["src"], tmp_path / "lsq", *common, "--rounding", "lsq")
+    a, b = load_dir(tmp_path / "rtn"), load_dir(tmp_path / "lsq")
+    assert set(a) == set(b) and all(a[k].shape == b[k].shape and a[k].dtype == b[k].dtype for k in a)
+    assert lsq["written_bytes"] == rtn["written_bytes"]
+    r = lsq["rounding"]
+    assert r["method"] == "lsq"
+    stats = [v for k, v in r.items() if isinstance(v, dict)]
+    assert stats and all(v["err_lsq"] <= v["err_rtn"] * (1 + 1e-6) for v in stats)
+    assert sum(v["err_lsq"] for v in stats) < 0.95 * sum(v["err_rtn"] for v in stats)
+    if family == "glm":  # glm's switch_mlp gate_proj is a stacked [E, out, in] tensor at write time
+        assert any(v["weighted"] for k, v in r.items() if isinstance(v, dict) and k.startswith("expert"))
+    generate_tokens(tmp_path / "lsq")

@@ -18,7 +18,7 @@ from mlx.utils import tree_flatten
 
 from mlx_vlm.utils import skip_multimodal_module, update_module_configs
 
-from . import alloc, prune, shim
+from . import alloc, prune, round as rounding, shim
 from .calib_io import CalibStats
 from .families import Family, MoELayer, family_for, find_moe_layers
 from .source import Source
@@ -68,6 +68,8 @@ class BuildOptions:
     dtype: Optional[str] = None
     shard_gb: float = 2.0
     dry_run: bool = False
+    rounding: str = "rtn"  # rtn | lsq (docs/plan/05 §2.6a)
+    lsq_iters: int = 4
 
 
 DEFAULT_FLOORS = ((r"lm_head$", 6), (r"embed_tokens$", 4))
@@ -270,6 +272,8 @@ class Builder:
         self.scores: Dict[str, prune.ExpertScores] = {}
         self.timings: Dict[str, float] = {}
         self.sens_report: Dict[str, object] = {}
+        self.round_stats: Dict[str, Dict[str, float]] = {}
+        self._imatrix_cache: Dict[int, Dict[str, np.ndarray]] = {}
 
     # -- expert scores / keep plans
 
@@ -706,7 +710,7 @@ class Builder:
         if not cfg.get("model_file") and (out / shim.SHIM_FILENAME).exists():
             (out / shim.SHIM_FILENAME).unlink()
         t1 = time.time()
-        written = {"main": self.write(self.main_chunks(plan), main_t, main_units, out)}
+        written = {"main": self.write(self.main_chunks(plan), main_t, main_units, out, plan=plan)}
         if cfg.get("model_file"):
             (out / shim.SHIM_FILENAME).write_text(shim.render(self.family.model_type, self.family.experts_attr))
         self.copy_aux(out)
@@ -715,12 +719,15 @@ class Builder:
             dcfg, mt, mtp_units = mtp_info
             mdir = out / "mtp"
             mdir.mkdir(exist_ok=True)
-            written["mtp"] = self.write(self.mtp_chunks(plan), mt, mtp_units, mdir)
+            written["mtp"] = self.write(self.mtp_chunks(plan), mt, mtp_units, mdir)  # no imatrix: own layer indices
             save_json(mdir / "config.json", dict(sorted(dcfg.items())))
             self.copy_aux(mdir)
         self.timings["write"] = time.time() - t1
         self.timings["total"] = time.time() - t0
         summary["written_bytes"] = written
+        summary["rounding"] = {"method": self.opts.rounding, "lsq_iters": self.opts.lsq_iters, **{
+            k: {**v, "ratio": v["err_lsq"] / v["err_rtn"] if v.get("err_rtn") else None}
+            for k, v in sorted(self.round_stats.items())}}
         summary["timings_s"] = self.timings
         for ns, nbytes in written.items():
             if nbytes != predicted[ns]:
@@ -754,7 +761,33 @@ class Builder:
                 total += int(np.prod(t.shape)) * t.itemsize
         return total
 
-    def write(self, chunks, target: Target, units: Dict[str, alloc.Unit], out: Path) -> int:
+    _LAYER_PATH = re.compile(r"(?:^|\.)layers\.(\d+)\.(.+)$")
+
+    def imatrix(self, path: str, shape, plan: Optional[Dict[str, List[int]]]) -> Optional[mx.array]:
+        """calib ``act_sqmean`` for this tensor's input channels: [in] or, for stacked experts, [kept, in]."""
+        m = self._LAYER_PATH.search(path)
+        if plan is None or not self.opts.calib or m is None:
+            return None
+        i, name = int(m.group(1)), m.group(2)
+        if i not in self._imatrix_cache:
+            f = Path(self.opts.calib) / f"layer_{i:03d}.npz"
+            arrays = {}
+            if f.exists():
+                with np.load(f, allow_pickle=False) as z:
+                    arrays = {k[len("act_sqmean."):]: z[k] for k in z.files if k.startswith("act_sqmean.")}
+            self._imatrix_cache = {i: arrays}  # layers are written in order; keep one
+        h = self._imatrix_cache[i].get(name)
+        if h is None:
+            return None
+        if h.ndim == 2:
+            kept = plan.get(str(i))
+            if kept is not None and len(kept) != h.shape[0]:
+                h = h[np.asarray(kept)]
+            if len(shape) != 3 or h.shape[0] != shape[0]:
+                return None
+        return mx.array(h.astype(np.float32))
+
+    def write(self, chunks, target: Target, units: Dict[str, alloc.Unit], out: Path, plan=None) -> int:
         writer = ShardWriter(out, int(self.opts.shard_gb * GB))
         for i, items in enumerate(chunks):
             weights = self.process(items, target, real=True)
@@ -763,7 +796,12 @@ class Builder:
                 path = k[: -len(".weight")] if k.endswith(".weight") else None
                 u = units.get(path)
                 if u is not None and u.choice.bits != alloc.BF16:
-                    q = mx.quantize(v, group_size=u.choice.group, bits=u.choice.bits, mode="affine")
+                    h = self.imatrix(path, v.shape, plan) if self.opts.rounding != "rtn" else None
+                    st = self.round_stats.setdefault(f"{u.kind}:{u.choice.label}", {})
+                    q = rounding.quantize(v, u.choice.bits, u.choice.group, self.opts.rounding, h=h,
+                                          iters=self.opts.lsq_iters, stats=st)
+                    st["weighted"] = st.get("weighted", 0) + (h is not None)
+                    st["tensors"] = st.get("tensors", 0) + 1
                     result[k] = q[0]
                     result[f"{path}.scales"] = q[1]
                     result[f"{path}.biases"] = q[2]
