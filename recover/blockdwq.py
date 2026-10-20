@@ -95,6 +95,25 @@ def frozen_branches(layer: nn.Module) -> tuple:
     return ()
 
 
+def split_frozen_attention(layer: nn.Module):
+    """(attention part, ffn part) of a GLM decoder layer's forward when its attention is frozen, else None. The
+    detached attention output depends only on the layer input, so it is computed once per sequence rather than
+    on every step (the sparse-attention prefill dominates those layers otherwise)."""
+    if "self_attn" not in frozen_branches(layer) or not hasattr(layer, "ffn_hc"):
+        return None
+    from mlx_vlm.models.base import create_ssm_mask
+
+    def attn(h):
+        if layer.is_linear:
+            return layer.attn_hc.apply_branch(h, layer.input_layernorm, layer.self_attn, create_ssm_mask(h[:, :, 0]), None)
+        return layer.attn_hc.apply_branch(h, layer.input_layernorm, layer.self_attn, None, None, None)[0]
+
+    def ffn(x):
+        return layer.ffn_hc.apply_branch(x, layer.post_attention_layernorm, layer.mlp)
+
+    return attn, ffn
+
+
 def _detach_attention():
     try:
         from mlx_vlm.models.glm5_next import language as glm
@@ -241,15 +260,19 @@ class BlockDWQ:
         self.report: List[dict] = []
 
     def fwd(self, arch, layer, hs):
+        return self.fwd_with(lambda h: arch.forward(layer, h, None, None), hs)
+
+    @staticmethod
+    def fwd_with(f, hs):
         outs = []
         for h in hs:
-            outs.append(arch.forward(layer, h, None, None))
+            outs.append(f(h))
             mx.eval(outs[-1])
         return outs
 
-    def mean_err(self, layer, xs, ts):
+    def mean_err(self, fwd, xs, ts):
         f = LOSSES[self.a.loss]
-        e = [f(self.student.arch.forward(layer, x, None, None), t) for x, t in zip(xs, ts)]
+        e = [f(fwd(x), t) for x, t in zip(xs, ts)]
         mx.eval(e)
         return float(np.mean([float(v) for v in e]))
 
@@ -258,8 +281,13 @@ class BlockDWQ:
         paths = self.expert_grads.enable(layer)
         if not names:
             return {"layer": i, "trainable": 0, "accepted": False}
+        fwd = lambda x: self.student.arch.forward(layer, x, None, None)
+        split = split_frozen_attention(layer)
+        if split is not None:
+            attn, fwd = split
+            s_tr, s_val = self.fwd_with(attn, s_tr), self.fwd_with(attn, s_val)
         dtype = {k: v.dtype for k, v in tree_flatten(layer.trainable_parameters())}
-        before = self.mean_err(layer, s_val, t_val)
+        before = self.mean_err(fwd, s_val, t_val)
         init = {k: mx.array(v) for k, v in tree_flatten(layer.trainable_parameters())}
         # fp32 master copies: bf16 cannot hold steps of ~1e-3 relative
         params = {k: v.astype(mx.float32) for k, v in init.items()}
@@ -268,7 +296,7 @@ class BlockDWQ:
         for name in frozen_branches(layer):  # detached: keep inference kernels (no VJP needed)
             layer[name].eval()
         opt = ScaledAdam(params, self.a.lr, self.a.epochs * len(s_tr))
-        loss_and_grad = nn.value_and_grad(layer, lambda x, t: LOSSES[self.a.loss](self.student.arch.forward(layer, x, None, None), t))
+        loss_and_grad = nn.value_and_grad(layer, lambda x, t: LOSSES[self.a.loss](fwd(x), t))
         rng = np.random.default_rng(self.a.seed + i)
         tr_loss = []
         for ep in range(self.a.epochs):
@@ -284,7 +312,7 @@ class BlockDWQ:
         layer.eval()
         trained = {k: v.astype(dtype[k]) for k, v in tree_flatten(layer.trainable_parameters())}
         layer.update(_tree(trained))
-        after = self.mean_err(layer, s_val, t_val)
+        after = self.mean_err(fwd, s_val, t_val)
         accepted = after < before * (1 - self.a.min_gain)
         if accepted:
             prefix = MLX_LAYER_PREFIX.format(i)
@@ -304,12 +332,17 @@ class BlockDWQ:
         mx.set_memory_limit(int(a.mem_gb * GB))
         seqs = self.train + self.val
         n_tr = len(self.train)
-        t_h = [self.teacher.embed(s)[None] for s in seqs]
-        s_h = [self.student.embed(s)[None].astype(t_h[0].dtype) for s in seqs]
+        start, streams = self.load_ckpt() if a.resume else (0, None)
+        if streams is None:
+            shutil.rmtree(self.ckpt_dir, ignore_errors=True)
+            t_h = [self.teacher.embed(s)[None] for s in seqs]
+            s_h = [self.student.embed(s)[None].astype(t_h[0].dtype) for s in seqs]
+        else:
+            s_h, t_h = streams
         mx.eval(t_h, s_h)
         n_layers = self.teacher.n_layers
         stop = min(n_layers, a.layers) if a.layers else n_layers
-        for i in range(stop):
+        for i in range(start, stop):
             t0 = time.time()
             mx.reset_peak_memory()
             tl = self.teacher.load_layer(i)
@@ -323,6 +356,7 @@ class BlockDWQ:
                 rec = self.train_layer(i, sl, s_h[:n_tr], t_h[:n_tr], s_h[n_tr:], t_h[n_tr:])
             s_h = self.fwd(self.student.arch, sl, s_h)
             del sl
+            self.expert_grads.release()
             mx.clear_cache()
             rec["seconds"] = round(time.time() - t0, 1)
             rec["peak_gb"] = round(mx.get_peak_memory() / GB, 2)
@@ -330,7 +364,57 @@ class BlockDWQ:
             vb, va = rec.get("val_before"), rec.get("val_after")
             log(f"layer {i:3d}: val rel-err {vb if vb is None else f'{vb:.5f}'} -> {va if va is None else f'{va:.5f}'} "
                 f"{'ACCEPT' if rec['accepted'] else 'keep'}  {rec['seconds']}s peak {rec['peak_gb']} GiB")
+            self.save_ckpt(i, s_h, t_h)
         self.write()
+        shutil.rmtree(self.ckpt_dir, ignore_errors=True)
+
+    # Checkpoint after every layer: the streams entering the next layer, each layer's accepted updates and the
+    # report, so a killed run resumes (--resume) at the next layer with identical results.
+    @property
+    def ckpt_dir(self) -> Path:
+        out = Path(self.a.out)
+        return out.with_name(out.name + ".ckpt")
+
+    def fingerprint(self) -> dict:
+        keys = ("student", "src", "tokens", "val_tokens", "seq_len", "epochs", "lr", "loss", "min_gain", "seed")
+        fp = {k: getattr(self.a, k) for k in keys}
+        fp["skip"] = sorted(self.a.skip)
+        fp["seqs"] = [int(len(s)) for s in self.train + self.val]
+        return fp
+
+    def save_ckpt(self, i, s_h, t_h):
+        d = self.ckpt_dir
+        d.mkdir(parents=True, exist_ok=True)
+        prefix = MLX_LAYER_PREFIX.format(i)
+        mine = {k: v for k, v in self.updates.items() if k.startswith(prefix)}
+        if mine:
+            mx.save_safetensors(str(d / f"updates_{i:03d}.safetensors"), mine)
+        streams = {f"s{j}": h for j, h in enumerate(s_h)} | {f"t{j}": h for j, h in enumerate(t_h)}
+        mx.save_safetensors(str(d / "streams.tmp.safetensors"), streams)
+        (d / "streams.tmp.safetensors").replace(d / "streams.safetensors")
+        state = {"next": i + 1, "fingerprint": self.fingerprint(), "report": self.report}
+        (d / "state.tmp.json").write_text(json.dumps(state, default=str))
+        (d / "state.tmp.json").replace(d / "state.json")
+
+    def load_ckpt(self):
+        """(next layer, (student, teacher) streams) from the checkpoint, or (0, None) if there is none."""
+        d = self.ckpt_dir
+        if not (d / "state.json").exists():
+            log("no checkpoint, starting from layer 0")
+            return 0, None
+        state = json.loads((d / "state.json").read_text())
+        if state["fingerprint"] != json.loads(json.dumps(self.fingerprint(), default=str)):
+            raise SystemExit(f"checkpoint {d} was made with different arguments or data; remove it to start over")
+        nxt = state["next"]
+        for i in range(nxt):
+            f = d / f"updates_{i:03d}.safetensors"
+            if f.exists():
+                self.updates.update(mx.load(str(f)))
+        self.report = state["report"]
+        arrays = mx.load(str(d / "streams.safetensors"))
+        n = len(self.train) + len(self.val)
+        log(f"resuming at layer {nxt} ({len(self.updates)} tensors updated so far)")
+        return nxt, ([arrays[f"s{j}"] for j in range(n)], [arrays[f"t{j}"] for j in range(n)])
 
     def write(self):
         src, out = Path(self.a.student), Path(self.a.out)
@@ -391,6 +475,7 @@ def parse_args(argv=None):
     p.add_argument("--layers", type=int, help="stop after this many layers (experiments)")
     p.add_argument("--skip", type=lambda s: {int(x) for x in s.split(",") if x}, default=set())
     p.add_argument("--mem-gb", type=float, default=48.0)
+    p.add_argument("--resume", action="store_true", help="continue from <out>.ckpt (written after every layer)")
     p.add_argument("--seed", type=int, default=0)
     return p.parse_args(argv)
 

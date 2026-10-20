@@ -150,6 +150,13 @@ class ExpertGrads:
                 paths[id(m)] = path
         return paths
 
+    def release(self):
+        """Drop the per-module custom functions and the stash. MLX keeps a custom function's inputs alive (here the
+        whole layer's expert weights, ~1.4 GB per GLM layer), and module ids are reused once a layer is freed, so
+        call this once a layer is done."""
+        self._fns.clear()
+        self.stash.clear()
+
     def fill(self, grads: Dict[str, mx.array], paths: Dict[int, str]) -> Dict[str, mx.array]:
         """Replace the zero scale/bias grads of stashed modules with the real ones (call after mx.eval(grads))."""
         for key, (m, x, dy, idx) in list(self.stash.items()):
