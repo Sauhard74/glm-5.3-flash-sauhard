@@ -3,7 +3,7 @@
 # Refuses to build if any layer lacks real calibration stats (build would silently fall back to weight saliency).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-LOG=logs/calib-glm.log CAL=artifacts/glm/calib OUT=models/glm-5.3-flash-custom
+LOG=logs/calib-glm.log CAL=artifacts/glm/calib OUT=models/glm-candidate-auto76
 BUDGET="${BUDGET_GB:-76}"
 
 until grep -q CALIB_DONE "$LOG"; do
