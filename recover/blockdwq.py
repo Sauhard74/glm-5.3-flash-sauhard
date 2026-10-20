@@ -24,6 +24,7 @@ from mlx.utils import tree_flatten
 
 from calib.arch import MLX_LAYER_PREFIX, make_arch
 from calib.run import load_samples
+from recover.qgrad import ExpertGrads
 
 GB = 1 << 30
 
@@ -80,12 +81,54 @@ class Student:
         return self.arch.expand_streams(h)
 
 
+def frozen_branches(layer: nn.Module) -> tuple:
+    """Sub-modules trained with their output detached (kept at their built scales/biases).
+
+    - GLM sparse attention: mlx-vlm tiles the per-query key gather only in the forward, so under autodiff it keeps
+      L x heads x top-k x dim (hundreds of GB at 1K tokens).
+    - Attention of any MoE layer: the gated-delta kernel has no VJP, so linear attention backprops through the
+      op-by-op path (~12 s per 1K-token step at GLM size), while routed experts hold ~97% of the layer's weights.
+    Dense layers still train their attention."""
+    has_moe = "switch_mlp" in getattr(layer, "mlp", {})
+    if getattr(layer, "block_type", None) == "deepseek_sparse_attention" or has_moe:
+        return ("self_attn",)
+    return ()
+
+
+def _detach_attention():
+    try:
+        from mlx_vlm.models.glm5_next import language as glm
+    except ImportError:
+        return
+    for cls in (glm.Glm5NextAttention, glm.Glm5NextLinearAttention):
+        if getattr(cls, "_dwq_detach", False):
+            continue
+
+        def make(orig):
+            def call(self, *a, **k):
+                out = orig(self, *a, **k)
+                if getattr(self, "_dwq_frozen", False):
+                    return tuple(mx.stop_gradient(o) for o in out) if isinstance(out, tuple) else mx.stop_gradient(out)
+                return out
+
+            return call
+
+        cls.__call__ = make(cls.__call__)
+        cls._dwq_detach = True
+
+
 def trainable(layer: nn.Module, max_bits: int = 8):
-    """Unfreeze only scales/biases of quantized modules below ``max_bits``; returns their dotted names."""
+    """Unfreeze only scales/biases of quantized modules below ``max_bits`` outside frozen branches (whose outputs
+    are then detached); returns their dotted names."""
     layer.freeze()
+    frozen = frozen_branches(layer)
+    for name in frozen:
+        object.__setattr__(layer[name], "_dwq_frozen", True)
     names = []
     for path, m in layer.named_modules():
         bits = getattr(m, "bits", None)
+        if any(path == f or path.startswith(f + ".") for f in frozen):
+            continue
         if bits is not None and hasattr(m, "scales") and bits < max_bits:
             m.unfreeze(keys=["scales", "biases"], recurse=False)
             names += [f"{path}.scales", f"{path}.biases"] if path else ["scales", "biases"]
@@ -212,6 +255,7 @@ class BlockDWQ:
 
     def train_layer(self, i, layer, s_tr, t_tr, s_val, t_val):
         names = trainable(layer)
+        paths = self.expert_grads.enable(layer)
         if not names:
             return {"layer": i, "trainable": 0, "accepted": False}
         dtype = {k: v.dtype for k, v in tree_flatten(layer.trainable_parameters())}
@@ -221,6 +265,8 @@ class BlockDWQ:
         params = {k: v.astype(mx.float32) for k, v in init.items()}
         layer.update(_tree(params))
         layer.train()
+        for name in frozen_branches(layer):  # detached: keep inference kernels (no VJP needed)
+            layer[name].eval()
         opt = ScaledAdam(params, self.a.lr, self.a.epochs * len(s_tr))
         loss_and_grad = nn.value_and_grad(layer, lambda x, t: LOSSES[self.a.loss](self.student.arch.forward(layer, x, None, None), t))
         rng = np.random.default_rng(self.a.seed + i)
@@ -228,7 +274,10 @@ class BlockDWQ:
         for ep in range(self.a.epochs):
             for j in rng.permutation(len(s_tr)):
                 loss, grads = loss_and_grad(s_tr[j].astype(mx.float32), t_tr[j])
-                params = opt.step(params, dict(tree_flatten(grads)))
+                grads = dict(tree_flatten(grads))
+                mx.eval(loss, grads)
+                grads = self.expert_grads.fill(grads, paths)  # expert scale/bias grads, outside the transform
+                params = opt.step(params, grads)
                 layer.update(_tree(params))
                 mx.eval(list(params.values()), opt.state(), loss)
                 tr_loss.append(float(loss))
@@ -250,6 +299,8 @@ class BlockDWQ:
     def run(self):
         a = self.a
         _no_index_grad()
+        _detach_attention()
+        self.expert_grads = ExpertGrads()
         mx.set_memory_limit(int(a.mem_gb * GB))
         seqs = self.train + self.val
         n_tr = len(self.train)
