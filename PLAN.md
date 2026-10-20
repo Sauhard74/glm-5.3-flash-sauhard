@@ -76,3 +76,23 @@ served on `http://127.0.0.1:8080` (OpenAI + Anthropic APIs) by the launchd contr
 **Background downloads (survive session close):** `zai-org/GLM-5.3-Flash` then `Qwen/Qwen3.8-Flash-Next` into the HF cache (log: `logs/downloads.log`). Stop with `pkill -f "hf download"`; rerun the same `hf download` to resume.
 
 **Next steps:** finish/review master plan chapters → review + test modules → integration run on tiny fixtures → calibrate on real sources → build ≤68 GB variants → eval vs the running baseline; swap in only if it wins.
+
+## Status — 2026-10-20 evening (GLM custom build)
+**GLM calibration done** (`artifacts/glm/calib`, 45 layers + ref, 04:52–10:19). Verified correct: calib's layer stream matches stock mlx-vlm, and the source MoE matches the transformers reference.
+
+**How to read GLM KL (important):** `evals.kl` now splits by chat role. Use `assistant_kl` (positions the model generates) as the quality headline. `user`/`system`/`tool` positions are prompt *reading*: KL there is large (2–7) for every build, because a chat model doesn't predict user/tool text verbatim and GLM's bf16 forward is hypersensitive there (a lossless fp16 round-trip alone moves it by KL ~0.3). It still tracks comprehension loss from pruning. fp32 activations were measured: no better than bf16.
+
+**A/B so far** (`results/<name>-l12/kl.json`, 12 samples/domain):
+
+| build | assistant KL | top-1 | tool KL | reasoning KL |
+|---|---|---|---|---|
+| A `glm-candidate-auto76` (REAP 153/288, RTN, 76 GB) | 0.121 | 92.4% | 6.98 | 0.069 |
+| B `glm-mass153-76` (mass score) | 0.123 | 92.3% | 6.73 | 0.086 |
+| C `glm-massauto-80` (mass, 162, 80 GB) | 0.118 | 92.6% | 6.69 | 0.081 |
+| **A + `--rounding lsq`** `glm-reap153-76-lsq` | **0.108** | 92.4% | 6.92 | **0.066** |
+
+- Rounding (LSQ + imatrix + range search, `build/round.py`) is the big lever: −25% weighted quant error, −10.5% assistant KL, same bytes.
+- Pruning drives the tool/user gap: pure REAP is flat on GLM and pruned the most-routed experts (kept experts carry only ~52% of routing frequency).
+- Running: C + LSQ (`glm-massauto-80-lsq`). Next: `recover/blockdwq.py` (blockwise DWQ, written and tested on tiny) on the winner, then task evals (code/tools), then promote to `models/glm-5.3-flash-custom` (the dashboard's glm profile).
+
+**Ops notes:** eval footprint ≈ model + ~10 GB (the projected-cache fix is now in `evals/common.load_model`). Run only one 70+ GB job at a time: swap is ~40 GB and jetsam killed evals that overlapped other work. The Qwen server is stopped during GLM work; start it from the dashboard afterwards.
