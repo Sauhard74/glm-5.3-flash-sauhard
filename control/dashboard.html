@@ -4,127 +4,182 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Local Model Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
+  /* Dark-first instrument panel: a status hero, the 128 GB memory band, model tiles, then readouts. */
   :root {
-    --bg: #f6f5f2; --panel: #ffffff; --ink: #1c1b19; --muted: #6d6a63; --line: #e4e1da;
-    --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --accent: #2b59c3; --bar: #e9e6df;
-    --mine: #2b59c3; --others: #a8a29a;
+    --bg: #0b0b0c; --panel: #131315; --panel-2: #18181b; --ink: #ececec; --text: #b4b4b8; --muted: #6e6e74;
+    --line: #232326; --line-2: #2e2e33; --accent: #7b9dff; --accent-soft: #16203a;
+    --ok: #4cd08a; --warn: #f0a83a; --bad: #ff6b5b; --others: #4a4a52; --free: #1d1d21;
+    --display: "Familjen Grotesk", -apple-system, "SF Pro Display", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: dark;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #131312; --panel: #1c1c1a; --ink: #ecebe7; --muted: #9a978f; --line: #2c2b28;
-      --ok: #3ccf7a; --warn: #e3a73b; --bad: #ff6b5b; --accent: #7aa2ff; --bar: #2a2926;
-      --mine: #7aa2ff; --others: #5c5953; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f2f2ef; --panel: #fbfbfa; --panel-2: #f5f5f2; --ink: #18181a; --text: #46464a; --muted: #8a8a8f;
+      --line: #dcdcd9; --line-2: #cfcfcb; --accent: #3e63dd; --accent-soft: #e3e9fb;
+      --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --others: #b4b4b8; --free: #e8e8e5; color-scheme: light; }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif; }
-  main { max-width: 920px; margin: 0 auto; padding: 28px 16px 48px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; font-family: ui-monospace, "SF Mono", monospace; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-    border: 1px solid var(--line); background: var(--panel); font-weight: 600; font-size: 13px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-  .running .dot { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 20%, transparent); }
-  .loading .dot, .starting .dot { background: var(--warn); animation: pulse 1s infinite alternate; }
-  @keyframes pulse { to { opacity: .35; } }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 20px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
-  .controls { display: flex; gap: 10px; flex-wrap: wrap; }
-  button { font: inherit; font-weight: 600; border-radius: 10px; padding: 10px 18px; cursor: pointer;
-    border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
-  button.primary { background: var(--ok); color: #fff; border-color: transparent; }
-  button.danger { background: var(--bad); color: #fff; border-color: transparent; }
-  button:disabled { opacity: .45; cursor: default; }
-  .big { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .unit { font-size: 13px; color: var(--muted); font-weight: 500; margin-left: 3px; }
-  .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--display); -webkit-font-smoothing: antialiased; }
+  main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; display: flex; flex-direction: column; gap: 16px; }
+  h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.02em; }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .mono { font-family: var(--mono); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; min-width: 0; }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 26px 26px 24px;
+    background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 10%, var(--panel)) 0%, var(--panel) 55%); }
+  .hero h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 650; line-height: 1.05; margin-top: 8px; }
+  .hero .path { font: 13px var(--mono); color: var(--muted); margin-top: 8px; word-break: break-all; }
+  .status { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px 8px 12px; border-radius: 999px;
+    border: 1px solid var(--line-2); background: var(--panel-2); font: 600 13px var(--display); color: var(--ink); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); position: relative; }
+  .running .dot { background: var(--ok); }
+  .running .dot::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--ok); opacity: .5; animation: ring 1.8s ease-out infinite; }
+  .loading .dot, .starting .dot { background: var(--warn); animation: blink 1s infinite alternate; }
+  @keyframes ring { from { transform: scale(.6); opacity: .6; } to { transform: scale(1.6); opacity: 0; } }
+  @keyframes blink { to { opacity: .35; } }
+  .power { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 14px; }
+  button { font: 600 14px var(--display); border-radius: 10px; padding: 9px 16px; cursor: pointer;
+    border: 1px solid var(--line-2); background: var(--panel-2); color: var(--ink); transition: border-color .15s, background .15s, transform .1s; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button.primary { background: var(--accent); color: #0b0b0c; border-color: transparent; }
+  button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line-2)); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hero-side { display: flex; flex-direction: column; align-items: flex-end; }
+
+  /* stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .stat { background: var(--panel); padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .stat b { font: 600 30px/1.1 var(--display); color: var(--ink); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .stat b small { font-size: 13px; color: var(--muted); font-weight: 500; margin-left: 3px; letter-spacing: 0; }
+  .stat span { font: 11.5px var(--mono); color: var(--muted); }
+  .spark { height: 26px; margin-top: 6px; width: 100%; }
+  .spark path { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .spark .area { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: none; }
+  @media (max-width: 760px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero { grid-template-columns: 1fr; } .hero-side { align-items: flex-start; } .power { justify-content: flex-start; } }
+
+  /* memory band */
+  .band-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .band-head h2 { font-size: 17px; font-weight: 600; }
+  .band { position: relative; height: 44px; border-radius: 10px; background: var(--free); display: flex; overflow: visible; }
+  .band i { display: flex; align-items: center; height: 100%; font: 500 11.5px var(--mono); color: #0b0b0c; padding-left: 10px; white-space: nowrap; overflow: hidden; transition: width .6s cubic-bezier(.2,.7,.2,1); }
+  .band i:first-child { border-radius: 10px 0 0 10px; }
+  .band .m { background: var(--accent); }
+  .band .o { background: var(--others); color: var(--ink); }
+  .capline { position: absolute; top: -7px; bottom: -7px; width: 0; border-left: 2px dashed var(--warn); transition: left .6s; }
+  .capline b { position: absolute; top: -20px; left: 4px; font: 500 11px var(--mono); color: var(--warn); white-space: nowrap; }
+  .ticks { position: relative; height: 18px; font: 11px var(--mono); color: var(--muted); margin-top: 6px; }
+  .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .ticks span:first-child { transform: none; } .ticks span:last-child { transform: translateX(-100%); }
+  .legend { display: flex; gap: 6px 18px; flex-wrap: wrap; font: 12px var(--mono); color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  /* models */
+  .models { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 760px) { .models { grid-template-columns: 1fr; } }
+  .model { position: relative; border: 1px solid var(--line-2); border-radius: 14px; padding: 18px; background: var(--panel-2); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .model.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset, 0 12px 40px -18px color-mix(in srgb, var(--accent) 60%, transparent); }
+  .model .top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .mname { font: 650 19px/1.2 var(--display); color: var(--ink); letter-spacing: -.01em; }
+  .mdetail { font-size: 13.5px; color: var(--text); margin-top: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: 500 11.5px var(--mono); padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+  .tag { font: 600 11px var(--mono); letter-spacing: .04em; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .tag.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .tag.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .tag.live { color: var(--accent); background: var(--accent-soft); }
+  .model .act { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .need { font: 12px var(--mono); color: var(--muted); }
+
+  /* lower grid */
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .grid .wide { grid-column: 1 / -1; }
+  .grid .two { grid-column: span 2; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .grid .two { grid-column: auto; } }
+  .card h2 { font: 600 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 9px 14px; font-size: 14px; }
   .kv span:nth-child(odd) { color: var(--muted); }
-  .kv span:nth-child(even) { font-variant-numeric: tabular-nums; text-align: right; }
-  .membar { position: relative; height: 14px; background: var(--bar); border-radius: 7px; overflow: hidden; margin: 10px 0 8px; display: flex; }
-  .membar i { display: block; height: 100%; }
-  .membar .cap { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .55; }
-  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
-  .legend b { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-  label { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; padding: 6px 0; }
-  select, input[type=number] { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--line);
-    border-radius: 8px; padding: 5px 8px; width: 150px; }
+  .kv span:nth-child(even) { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+  code { font: 12.5px var(--mono); background: var(--panel-2); border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; color: var(--ink); cursor: copy; }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; padding: 7px 0; border-bottom: 1px dashed var(--line); color: var(--text); }
+  label:last-of-type { border-bottom: 0; }
+  select, input[type=number] { font: 13px var(--mono); background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 8px; width: 150px; }
   input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
-  .wide { grid-column: 1 / -1; }
-  pre { margin: 0; font: 12px/1.5 ui-monospace, "SF Mono", monospace; color: var(--muted); white-space: pre-wrap;
-    word-break: break-all; max-height: 220px; overflow: auto; }
-  code { font: 12.5px ui-monospace, "SF Mono", monospace; background: var(--bg); padding: 2px 6px; border-radius: 6px; }
-  .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
-  .err { color: var(--bad); font-size: 13px; margin-top: 8px; }
-  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
-    padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
-  .toast.show { opacity: .92; }
-  .models { display: grid; gap: 10px; }
-  .mrow { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
-  .mrow.on { border-color: var(--ok); }
-  .mname { font-weight: 650; }
-  .mdetail { color: var(--muted); font-size: 13px; }
-  .mmeta { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  .tag { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); margin-left: 6px; vertical-align: 1px; }
-  .tag.ok { color: var(--ok); border-color: currentColor; }
-  .tag.warn { color: var(--warn); border-color: currentColor; }
-  .mrow .controls { justify-content: flex-end; }
-  .mrow button { padding: 7px 14px; font-size: 14px; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .err { color: var(--bad); font: 12px var(--mono); margin-top: 8px; overflow-wrap: anywhere; }
+  .term { margin: 0; background: #070708; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font: 12px/1.6 var(--mono); color: #9a9aa2;
+    white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow: auto; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 8px); background: var(--ink); color: var(--bg);
+    padding: 9px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; }
+  .toast.show { opacity: .95; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 <main>
-  <header>
+  <section class="card hero">
     <div>
-      <h1>Local Model Control</h1>
-      <div class="sub" id="model">—</div>
+      <p class="eyebrow">Local model control · MacBook Pro M5 Max · 128 GB</p>
+      <h1 id="title">—</h1>
+      <div class="path" id="model">—</div>
     </div>
-    <div class="pill" id="pill"><span class="dot"></span><span id="phase">…</span></div>
-  </header>
+    <div class="hero-side">
+      <div class="status" id="pill"><span class="dot"></span><span id="phase">…</span></div>
+      <div class="power">
+        <button class="primary" id="start">Start</button>
+        <button id="restart">Restart</button>
+        <button class="danger" id="stop">Stop</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><span>Decode</span><b id="tps">—<small>tok/s</small></b><svg class="spark" id="spark-tps" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    <div class="stat"><span>Model memory</span><b id="rss">0<small>GB</small></b><svg class="spark" id="spark-rss" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    <div class="stat"><span>Left for your apps</span><b id="avail">—<small>GB</small></b><svg class="spark" id="spark-avail" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+    <div class="stat"><span>Uptime</span><b id="uptime">—</b><span id="lastreq" style="margin-top:8px">no requests yet</span></div>
+  </section>
+
+  <section class="card">
+    <div class="band-head"><h2>Unified memory</h2><span class="eyebrow" id="memsum">—</span></div>
+    <div class="band" id="band"><i class="m" id="m-mine"></i><i class="o" id="m-oth"></i><span class="capline" id="m-cap"><b id="m-capl">cap</b></span></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Model</span><span><i style="background:var(--others)"></i>Everything else</span><span><i style="background:var(--free);border:1px solid var(--line-2)"></i>Free</span><span><i style="border:1px dashed var(--warn)"></i>Model cap</span><span id="swap">swap —</span><span id="freepct">pressure —</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Models</h2>
+    <div class="models" id="models"></div>
+    <div class="note">One model runs at a time so the rest of the Mac stays free; starting another switches over. "Fits" means it fits in free memory with 8 GB to spare.</div>
+  </section>
 
   <div class="grid">
-    <section class="card wide">
-      <h2>Models</h2>
-      <div class="models" id="models"></div>
-      <div class="note">One model runs at a time so the rest of the Mac stays free; starting another switches over. "Fits" means it fits in free memory with 8 GB to spare.</div>
-    </section>
-    <section class="card">
-      <h2>Power</h2>
-      <div class="controls">
-        <button class="primary" id="start">Start</button>
-        <button class="danger" id="stop">Stop</button>
-        <button id="restart">Restart</button>
-      </div>
-      <div class="note" id="powernote">Stopping frees all of the model's memory.</div>
-      <div class="kv" style="margin-top:12px">
-        <span>Endpoint</span><span id="endpoint">—</span>
-        <span>Uptime</span><span id="uptime">—</span>
-        <span>Keep Mac awake</span><span id="awake">—</span>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Memory</h2>
-      <div><span class="big" id="rss">0</span><span class="unit">GB used by model</span></div>
-      <div class="membar" id="membar"><i id="m-mine" style="background:var(--mine)"></i><i id="m-oth" style="background:var(--others)"></i><span class="cap" id="m-cap"></span></div>
-      <div class="legend"><span><b style="background:var(--mine)"></b>Model</span><span><b style="background:var(--others)"></b>Everything else</span><span><b style="background:var(--ink);opacity:.55;width:2px"></b>Model cap</span></div>
-      <div class="kv" style="margin-top:10px">
-        <span>Available to apps</span><span id="avail">—</span>
-        <span>macOS free</span><span id="freepct">—</span>
-        <span>Swap</span><span id="swap">—</span>
-      </div>
-    </section>
-
     <section class="card">
       <h2>Last request</h2>
-      <div><span class="big" id="tps">—</span><span class="unit">tok/s decode</span></div>
-      <div class="kv" style="margin-top:12px">
+      <div class="kv">
+        <span>Decode</span><span id="dtok">—</span>
         <span>Prefill</span><span id="ptps">—</span>
         <span>Prompt / cached</span><span id="ptok">—</span>
-        <span>At</span><span id="lastreq">—</span>
+        <span>Keep Mac awake</span><span id="awake">—</span>
       </div>
       <div class="err" id="err"></div>
+    </section>
+
+    <section class="card two">
+      <h2>Connect</h2>
+      <div class="kv">
+        <span>Claude Code</span><span><code>scripts/claude-local.sh</code></span>
+        <span>OpenAI base URL</span><span><code id="oai">—</code></span>
+        <span>Anthropic base URL</span><span><code id="anth">—</code></span>
+        <span>Endpoint</span><span id="endpoint">—</span>
+      </div>
+      <div class="note">Click an address to copy it.</div>
     </section>
 
     <section class="card">
@@ -135,34 +190,36 @@
       <label>Memory cap (GB) <input type="number" id="s-cap" min="40" max="110" step="5"></label>
       <label>Prefill chunk <input type="number" id="s-prefill" min="512" max="8192" step="512"></label>
       <label>Keep Mac awake while running <input type="checkbox" id="s-awake"></label>
-      <div class="controls" style="margin-top:8px"><button id="save">Save &amp; apply</button></div>
-      <div class="note">Edits the selected profile; the running model restarts to apply. Keep-awake stops idle sleep and, on power, system sleep. Closing the lid on battery still sleeps the Mac; the model pauses and resumes on wake.</div>
+      <div style="margin-top:12px"><button id="save">Save &amp; apply</button></div>
+      <div class="note">Edits the selected profile; the running model restarts to apply. Keep-awake stops idle sleep and, on power, system sleep.</div>
     </section>
 
-    <section class="card wide">
-      <h2>Use it</h2>
-      <div class="kv">
-        <span>Claude Code</span><span><code>scripts/claude-local.sh</code></span>
-        <span>OpenAI base URL</span><span><code id="oai">—</code></span>
-        <span>Anthropic base URL</span><span><code id="anth">—</code></span>
-      </div>
-    </section>
-
-    <section class="card wide">
+    <section class="card two">
       <h2>Server log</h2>
-      <pre id="log"></pre>
+      <pre class="term" id="log"></pre>
     </section>
   </div>
 </main>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const AUTH = { "x-control-token": "__CONTROL_TOKEN__" };
 let busy = false, profiles = [], editing = null;
+const hist = { tps: [], rss: [], avail: [] };
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
 function fmtUptime(s) { if (!s) return "—"; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`; }
 const LABEL = { running: "Running", loading: "Loading…", starting: "Starting…", stopped: "Stopped" };
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function spark(id, data, lo, hi) {
+  const el = $(id); if (data.length < 2) { el.innerHTML = ""; return; }
+  const min = lo ?? Math.min(...data), max = hi ?? Math.max(...data), span = Math.max(max - min, 1e-6);
+  const pts = data.map((v, i) => [i / (data.length - 1) * 100, 24 - (v - min) / span * 22]);
+  const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+  el.innerHTML = `<path class="area" d="${d}L100 26L0 26Z"/><path d="${d}"/>`;
+}
+function push(arr, v) { arr.push(v); if (arr.length > 60) arr.shift(); }
 
 async function post(path, body) {
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", ...AUTH }, body: body ? JSON.stringify(body) : undefined });
@@ -175,7 +232,8 @@ async function refresh() {
   let s;
   try { s = await (await fetch("/api/status", { headers: AUTH })).json(); } catch { $("phase").textContent = "Control offline"; return; }
   const ph = s.phase;
-  $("pill").className = "pill " + ph; $("phase").textContent = LABEL[ph] || ph;
+  $("pill").className = "status " + ph; $("phase").textContent = LABEL[ph] || ph;
+  $("title").textContent = s.settings.name || s.active;
   $("model").textContent = s.settings.model;
   $("start").disabled = busy || ph !== "stopped";
   $("stop").disabled = busy || ph === "stopped";
@@ -185,43 +243,53 @@ async function refresh() {
   $("awake").textContent = s.keep_awake_active ? "On" : "Off";
   $("oai").textContent = s.endpoint + "/v1"; $("anth").textContent = s.endpoint;
 
-  const m = s.memory, tot = m.total_gb;
-  $("rss").textContent = s.server_rss_gb.toFixed(1);
-  $("m-mine").style.width = (100 * s.server_rss_gb / tot) + "%";
-  $("m-oth").style.width = (100 * Math.max(0, m.used_gb - s.server_rss_gb) / tot) + "%";
+  // the model's weights are file-backed, so macOS may count them as available rather than used
+  const m = s.memory, tot = m.total_gb, mine = s.server_rss_gb;
+  const others = Math.max(0, m.used_gb > mine ? m.used_gb - mine : m.used_gb);
+  $("m-mine").style.width = (100 * mine / tot) + "%";
+  $("m-mine").textContent = mine ? `model ${mine.toFixed(1)} GB` : "";
+  $("m-oth").style.width = (100 * Math.min(others, tot - mine) / tot) + "%";
+  $("m-oth").textContent = others > 8 ? `other ${others.toFixed(0)} GB` : "";
   $("m-cap").style.left = (100 * s.settings.cap_gb / tot) + "%";
-  $("avail").textContent = m.available_gb + " GB";
-  $("freepct").textContent = m.free_pct == null ? "—" : m.free_pct + "%";
-  $("swap").textContent = m.swap_gb + " GB";
+  $("m-capl").textContent = `cap ${s.settings.cap_gb} GB`;
+  $("memsum").textContent = `${Math.max(0, tot - mine - others).toFixed(0)} GB free of ${tot.toFixed(0)}`;
+  $("rss").innerHTML = `${mine.toFixed(1)}<small>GB</small>`;
+  const left = Math.max(0, tot - mine - others);
+  $("avail").innerHTML = `${left.toFixed(1)}<small>GB</small>`;
+  $("freepct").textContent = m.free_pct == null ? "pressure —" : `macOS free ${m.free_pct}%`;
+  $("swap").textContent = `swap ${m.swap_gb} GB`;
+  if (!$("ticks").childElementCount) $("ticks").innerHTML = [0, 32, 64, 96, 128].map(v => `<span style="left:${v / tot * 100}%">${v} GB</span>`).join("");
 
   const st = s.stats || {};
-  $("tps").textContent = st.decode_tps != null ? st.decode_tps.toFixed(1) : "—";
+  $("tps").innerHTML = st.decode_tps != null ? `${st.decode_tps.toFixed(1)}<small>tok/s</small>` : "—<small>tok/s</small>";
+  $("dtok").textContent = st.decode_tps != null ? `${st.decode_tokens} tokens at ${st.decode_tps.toFixed(1)} tok/s` : "—";
   $("ptps").textContent = st.prefill_tps != null ? Math.round(st.prefill_tps) + " tok/s" : "—";
   $("ptok").textContent = st.prompt_tokens != null ? `${st.prompt_tokens} / ${st.cached_tokens}` : "—";
-  $("lastreq").textContent = st.last_request || "—";
+  $("lastreq").textContent = st.last_request ? "last request " + st.last_request.slice(11, 16) : "no requests yet";
   $("err").textContent = st.error && ph !== "running" ? st.error : "";
   $("log").textContent = (st.log_tail || []).map(l => l.length > 220 ? l.slice(0, 220) + "…" : l).join("\n");
+  push(hist.tps, st.decode_tps || 0); push(hist.rss, mine); push(hist.avail, left);
+  spark("spark-tps", hist.tps, 0); spark("spark-rss", hist.rss, 0, tot); spark("spark-avail", hist.avail, 0, tot);
 
   profiles = (await (await fetch("/api/profiles", { headers: AUTH })).json()).profiles;
   renderModels(ph);
   if (editing === null) { editing = s.active; $("s-awake").checked = s.settings.keep_awake; fillSettings(); }
-  $("s-profile").innerHTML = profiles.map(p => `<option value="${p.id}" ${p.id === editing ? "selected" : ""}>${p.name}</option>`).join("");
+  $("s-profile").innerHTML = profiles.map(p => `<option value="${esc(p.id)}" ${p.id === editing ? "selected" : ""}>${esc(p.name)}</option>`).join("");
 }
-
-function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 function renderModels(ph) {
   $("models").innerHTML = profiles.map(p => {
-    const state = p.running ? (ph === "running" ? '<span class="tag ok">Running</span>' : '<span class="tag warn">Loading…</span>') : "";
-    const fit = !p.built ? '<span class="tag warn">Not built yet</span>' : (p.running ? "" : (p.fits ? '<span class="tag ok">Fits</span>' : '<span class="tag warn">Low memory</span>'));
-    const meta = [p.built ? `${p.disk_gb} GB on disk` : p.model, `~${p.expected_gb} GB in use`,
-                  p.mtp && (p.drafter_resolved || !p.built) ? `MTP block ${p.draft_block}` : "no MTP", `cap ${p.cap_gb} GB`].join(" · ");
+    const state = p.running ? (ph === "running" ? '<span class="tag live">Running</span>' : '<span class="tag warn">Loading…</span>') :
+      (!p.built ? '<span class="tag warn">Not built</span>' : (p.fits ? '<span class="tag ok">Fits</span>' : '<span class="tag warn">Low memory</span>'));
+    const chips = [p.built ? `${p.disk_gb} GB on disk` : p.model, `~${p.expected_gb} GB in use`,
+                   p.mtp && (p.drafter_resolved || !p.built) ? `MTP block ${p.draft_block}` : "no MTP", `cap ${p.cap_gb} GB`];
     const btn = p.running
       ? `<button class="danger" data-act="stop">Stop</button>`
-      : `<button class="primary" data-act="start" data-id="${p.id}" ${!p.built || busy ? "disabled" : ""}>${ph !== "stopped" ? "Switch to this" : "Start"}</button>`;
-    return `<div class="mrow ${p.running ? "on" : ""}"><div><div class="mname">${esc(p.name)}${state}${fit}</div>
-      <div class="mdetail">${esc(p.detail || "")}</div><div class="mmeta">${esc(meta)}</div></div>
-      <div class="controls">${btn}</div></div>`;
+      : `<button class="primary" data-act="start" data-id="${esc(p.id)}" ${!p.built || busy ? "disabled" : ""}>${ph !== "stopped" ? "Switch to this" : "Start"}</button>`;
+    return `<div class="model ${p.running ? "on" : ""}"><div class="top"><div><div class="mname">${esc(p.name)}</div>
+      <div class="mdetail">${esc(p.detail || "")}</div></div>${state}</div>
+      <div class="chips">${chips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+      <div class="act"><span class="need">${esc(p.model)}</span>${btn}</div></div>`;
   }).join("");
 }
 
@@ -243,6 +311,9 @@ $("models").onclick = async (e) => {
   busy = false; refresh();
 };
 $("s-profile").onchange = () => { editing = $("s-profile").value; fillSettings(); };
+document.querySelectorAll("code").forEach(c => c.addEventListener("click", () => {
+  navigator.clipboard.writeText(c.textContent).then(() => toast("Copied " + c.textContent), () => {});
+}));
 
 async function act(path, msg) {
   busy = true; refresh();

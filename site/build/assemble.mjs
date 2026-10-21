@@ -238,6 +238,12 @@ table.field td.over{color:var(--warn)}
 table.field td:nth-child(2){background:transparent}
 tr.us-row td{background:color-mix(in srgb,var(--accent-soft) 70%,transparent)!important}
 tr.us-row td b{color:var(--accent)}
+.shot{max-width:980px;margin:36px 0 0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0b0c;box-shadow:0 30px 80px -40px rgba(0,0,0,.6)}
+.shot .chrome{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#161618;border-bottom:1px solid #232326}
+.shot .chrome i{width:11px;height:11px;border-radius:50%;background:#3a3a3f}
+.shot .chrome span{margin-left:10px;font:12px var(--mono);color:#8a8a8f}
+.shot img{display:block;width:100%;height:auto;max-width:100%}
+.footnotes{margin-top:22px;display:flex;flex-direction:column;gap:6px;font:13px/1.55 var(--mono);color:var(--muted);max-width:90ch}
 /* run */
 pre{margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto;font:13px/1.65 var(--mono);color:var(--ink)}
 .copy{float:right;font:500 12px var(--display);border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:4px 10px;border-radius:6px;cursor:pointer}
@@ -259,7 +265,7 @@ footer li{break-inside:avoid;margin-bottom:6px}
 <li><a href="#detours"><i></i><span>Detours</span></a></li>
 <li><a href="#standing"><i></i><span>Standing</span></a></li>
 <li><a href="#field"><i></i><span>Open field</span></a></li>
-<li><a href="#run"><i></i><span>Run it</span></a></li>
+<li><a href="#run"><i></i><span>My setup</span></a></li>
 </ul></nav>
 
 <header class="hero"><div class="wrap">
@@ -269,7 +275,7 @@ footer li{break-inside:avoid;margin-bottom:6px}
   <div class="numbers">
     <div><b>71.6<small>GB</small></b><span>GLM 5.3 Flash-sauhard resident, of 128</span></div>
     <div><b>92.4<small>%</small></b><span>GLM 5.3 Flash-sauhard: next-token agreement with the original</span></div>
-    <div><b>41.5<small>tok/s</small></b><span>GLM 5.3 Flash-sauhard decode, measured</span></div>
+    <div><b>41.5<small>tok/s**</small></b><span>GLM 5.3 Flash-sauhard decode, measured</span></div>
     <div><b>42<small>vs 41</small></b><span>AA index: original GLM-5.3-Flash vs Sonnet 5.5 (medium)</span></div>
   </div>
   <a class="begin" href="#problem">Follow the build <svg viewBox="0 0 16 16"><path d="M8 2v12M3 9l5 5 5-5"/></svg></a>
@@ -394,35 +400,21 @@ footer li{break-inside:avoid;margin-bottom:6px}
   </div>
 </div></section>
 
-<section class="ch" id="run"><div class="wrap ch-grid flip">
-  <div class="story">
-    <span class="num">08 · Run it</span>
-    <h2>A dashboard, two models, nothing in the cloud</h2>
-    <p>A launchd service keeps a local control panel up. Start, stop or switch between GLM and a tuned Qwen3.8-Flash-Next profile, watch memory, and point any OpenAI- or Anthropic-compatible client at it, Claude Code included.</p>
-    <p>The server clamps how much memory it may pin, caps itself at 84 GB, and skips a prefill copy that costs 22 to 24 GB at 32K context without changing a single output token.</p>
-    <ul class="open-items">
-      <li>Speculative decoding with GLM's own draft head is built in but not yet verified, so 41.5 tok/s is plain decode.</li>
-      <li>Long-context retrieval at 64K to 128K has not been measured on this build.</li>
-      <li>The index score for GLM 5.3 Flash-sauhard is inferred from its fidelity, not measured.</li>
-    </ul>
+<section class="ch" id="run"><div class="wrap">
+  <div class="story" style="position:static;max-width:780px">
+    <span class="num">08 · My setup</span>
+    <h2>My setup</h2>
+    <p>This is the control panel that runs on the Mac every day. A launchd service keeps it up; one click starts, stops or switches between GLM 5.3 Flash-sauhard and a tuned Qwen3.8-Flash-Next, and any OpenAI- or Anthropic-compatible client can use the model, Claude Code included.</p>
+    <p>GLM 5.3 Flash-sauhard serves at 41.5 tok/s** from 71.5 GB, with the server capped at 84 GB so the editor, builds and Claude Code always have room. Context reaches 128K tokens***.</p>
   </div>
-  <div class="stack2">
-    <div><button class="copy" type="button" data-copy="c1">Copy</button><p class="eyebrow" style="margin-bottom:10px">Endpoints</p>
-<pre id="c1">dashboard   http://127.0.0.1:8090
-OpenAI API  http://127.0.0.1:8080/v1
-Anthropic   http://127.0.0.1:8080/v1/messages
-model       models/glm-5.3-flash-custom</pre></div>
-    <div><button class="copy" type="button" data-copy="c2">Copy</button><p class="eyebrow" style="margin-bottom:10px">Memory guardrails</p>
-<pre id="c2">mx.set_memory_limit(84 GB - 4 GB)
-mx.set_wired_limit(min(n, WIRE))   # stock wires 107 GB
-mx.set_cache_limit(2 GB)
-_MAX_PROJECTED_PREFILL_TOKENS = 0  # -22 GB at 32K</pre></div>
-    <div class="facts">
-      <div><b>71.6 GB</b><span>resident while serving</span></div>
-      <div><b>~45 GB</b><span>left for your work</span></div>
-      <div><b>7</b><span>builds compared end to end</span></div>
-      <div><b>54 tok/s</b><span>Qwen profile, for fast agent loops</span></div>
-    </div>
+  <figure class="shot">
+    <div class="chrome"><i></i><i></i><i></i><span>127.0.0.1:8090</span></div>
+    <img src="dashboard.webp" width="1600" height="2241" alt="The local model control dashboard: GLM 5.3 Flash-sauhard running at 41.5 tokens per second using 71.5 GB, a unified-memory bar with the 84 GB cap, model cards for GLM 5.3 Flash-sauhard and Qwen3.8-Flash-Next, connection addresses, settings and the server log.">
+  </figure>
+  <div class="footnotes">
+    <p>* The index score for GLM 5.3 Flash-sauhard is inferred from its 92.4% next-token agreement with the original, not measured on the Artificial Analysis suite.</p>
+    <p>** 41.5 tok/s is plain decode. Speculative decoding with GLM's own draft head is built in but not yet verified.</p>
+    <p>*** Long-context retrieval at 64K to 128K has not been measured on GLM 5.3 Flash-sauhard.</p>
   </div>
 </div></section>
 
