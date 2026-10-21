@@ -14,7 +14,7 @@ const LADDER = [
   ["Claude Fable 5.1", "anthropic", 49, "medium"],
   ["GPT-6.1 Sol", "openai", 48, "medium"],
   ["GLM-5.3-Flash (original)", "base", 42, "full-precision base"],
-  ["GLM 5.3 Flash-sauhard", "ours", 40.5, "estimate, not yet measured"],
+  ["GLM 5.3 Flash-sauhard", "ours", 40.5, "estimated"],
   ["Claude Sonnet 5.5", "anthropic", 41, "medium"],
   ["Qwen3.8-Flash-Next", "open", 40, "open weights"],
   ["Claude Haiku 5.5", "anthropic", 34, "medium"],
@@ -41,7 +41,7 @@ const h2hRows = H2H.map(([n, g, s, o, u]) => {
 }).join("");
 const wins = H2H.filter(([, g, s]) => g > s).length, ties = H2H.filter(([, g, s]) => g === s).length;
 
-const ladder = LADDER.map(([n, who, v, eff]) => `<li class="rung ${who}"><span class="rn">${n}<small>${eff}</small></span><span class="rt"><i style="--w:${(v / 56) * 100}%"></i></span><b>${who === "ours" ? "40–41" : v}</b></li>`).join("");
+const ladder = LADDER.map(([n, who, v, eff]) => `<li class="rung ${who}"><span class="rn">${n}<small>${eff}</small></span><span class="rt"><i style="--w:${(v / 56) * 100}%"></i></span><b>${who === "ours" ? "40–41*" : v}</b></li>`).join("");
 
 const LESSONS = [
   ["Evaluation", "A mean KL of 2.9 means the build is broken.", "The error lives where the model reads, not where it writes.", "Split by chat role, assistant tokens sat at KL 0.12 with 92% top-1 agreement. User and tool positions run at KL 3 to 7 for every build, the reference included, because no chat model predicts your prompt word for word."],
@@ -361,8 +361,9 @@ footer li{break-inside:avoid;margin-bottom:6px}
       <h3>Artificial Analysis Intelligence Index</h3>
       <p class="sub">API models at medium reasoning effort · October 2026</p>
       <ol class="ladder">${ladder}</ol>
-      <div class="legend"><span><i style="background:var(--anth)"></i>Anthropic</span><span><i style="background:var(--oai)"></i>OpenAI</span><span><i style="background:var(--open)"></i>Open weights</span><span><i style="background:var(--accent)"></i>Original GLM-5.3-Flash</span><span><i style="background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 6px)"></i>GLM 5.3 Flash-sauhard (estimate)</span></div>
-    </div>
+      <div class="legend"><span><i style="background:var(--anth)"></i>Anthropic</span><span><i style="background:var(--oai)"></i>OpenAI</span><span><i style="background:var(--open)"></i>Open weights</span><span><i style="background:var(--accent)"></i>Original GLM-5.3-Flash</span><span><i style="background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 6px)"></i>GLM 5.3 Flash-sauhard*</span></div>
+    <p class="note">* Estimated from GLM 5.3 Flash-sauhard's 92.4% next-token agreement with the original; it has not been run on the Artificial Analysis suite.</p>
+</div>
     <div class="panel">
       <h3>Head to head at medium effort</h3>
       <p class="sub">Independent Artificial Analysis results · best in each row in bold · GLM base is the original GLM-5.3-Flash</p>
