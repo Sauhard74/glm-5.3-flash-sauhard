@@ -80,6 +80,45 @@ const FIELD = [
 ];
 const fieldRows = FIELD.map(([n, base, aa, gb, how, fid, src, us]) => `<tr${us ? ' class="us-row"' : ""}><td><b>${n}</b><small>${how}</small></td><td>${base}<small>AA ${aa}</small></td><td class="n${gb > 84 ? " over" : ""}">${gb}</td><td>${fid}<small>${src}</small></td></tr>`).join("");
 
+// size vs published top-1 agreement for open GLM-5.3-Flash builds (author numbers; ours measured)
+const PTS = [
+  ["GLM 5.3 Flash-sauhard", 71, 92.4, "us", "end"],
+  ["unsloth UD-IQ1_S", 93.1, 70.9, "", "start"],
+  ["orcarouter 2-bit", 102, 77.2, "", "start"],
+  ["unsloth UD-IQ3_XXS", 120.4, 81.6, "", "end"],
+  ["unsloth UD-IQ4_XS", 157, 88.2, "", "end"],
+  ["orcarouter 3-bit", 184, 92.06, "", "end"],
+];
+function scatter() {
+  const W = 560, H = 380, L = 48, R = 18, T = 18, B = 46;
+  const x = (gb) => L + ((gb - 60) / (200 - 60)) * (W - L - R);
+  const y = (t) => T + (1 - (t - 65) / (95 - 65)) * (H - T - B);
+  const o = [];
+  o.push(`<rect x="${x(128)}" y="${T}" width="${x(200) - x(128)}" height="${H - T - B}" class="sc-zone"/>`);
+  o.push(`<text x="${(x(128) + x(200)) / 2}" y="${T + 16}" text-anchor="middle" class="sc-zt">does not fit 128 GB</text>`);
+  for (const t of [70, 75, 80, 85, 90, 95]) o.push(`<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" class="sc-grid"/><text x="${L - 8}" y="${y(t) + 4}" text-anchor="end" class="sc-ax">${t}%</text>`);
+  for (const g of [60, 80, 100, 120, 140, 160, 180, 200]) o.push(`<text x="${x(g)}" y="${H - B + 18}" text-anchor="middle" class="sc-ax">${g}</text>`);
+  o.push(`<text x="${(L + W - R) / 2}" y="${H - 8}" text-anchor="middle" class="sc-ax">size on disk, GB</text>`);
+  o.push(`<line x1="${x(84)}" x2="${x(84)}" y1="${T}" y2="${H - B}" class="sc-cap"/><text x="${x(84) + 5}" y="${H - B - 8}" class="sc-capt">84 GB cap</text>`);
+  for (const [n, gb, t, cls, anchor] of PTS) {
+    const cx = x(gb), cy = y(t), dx = anchor === "end" ? -10 : 10;
+    o.push(`<circle cx="${cx}" cy="${cy}" r="${cls ? 7 : 5}" class="sc-pt ${cls}"/>`);
+    o.push(`<text x="${cx + dx}" y="${cy + (cls ? -12 : 4)}" text-anchor="${cls ? "start" : anchor}" class="sc-lbl ${cls}">${n}</text>`);
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scatter of open GLM-5.3-Flash builds by size and top-1 agreement. GLM 5.3 Flash-sauhard sits top left at 71 GB and 92.4 percent; other builds that fit 128 GB report 71 to 82 percent; only builds above 128 GB reach 88 to 92 percent.">${o.join("")}</svg>`;
+}
+const SPEC = [
+  ["Machine", "MacBook Pro, Apple M5 Max"],
+  ["CPU / GPU", "18-core / 40-core"],
+  ["Unified memory", "128 GB · 614 GB/s"],
+  ["Runtime", "MLX 0.32.4 · mlx-vlm 0.7.9"],
+  ["Daily model", "GLM 5.3 Flash-sauhard · 71.5 GB"],
+  ["Fast model", "Qwen3.8-Flash-Next · 48 GB peak"],
+  ["Server", "OpenAI + Anthropic APIs, prompt cache"],
+  ["Guardrail", "84 GB process cap, 45 GB kept free"],
+];
+const specRows = SPEC.map(([k, v]) => `<div class="spec-row"><span>${k}</span><b>${v}</b></div>`).join("");
+
 const page = `<title>GLM 5.3 Flash-sauhard</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -238,12 +277,33 @@ table.field td.over{color:var(--warn)}
 table.field td:nth-child(2){background:transparent}
 tr.us-row td{background:color-mix(in srgb,var(--accent-soft) 70%,transparent)!important}
 tr.us-row td b{color:var(--accent)}
-.shot{max-width:980px;margin:36px 0 0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0b0c;box-shadow:0 30px 80px -40px rgba(0,0,0,.6)}
+.shot{max-width:980px;margin:36px auto 0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0b0c;box-shadow:0 30px 80px -40px rgba(0,0,0,.6)}
 .shot .chrome{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#161618;border-bottom:1px solid #232326}
 .shot .chrome i{width:11px;height:11px;border-radius:50%;background:#3a3a3f}
 .shot .chrome span{margin-left:10px;font:12px var(--mono);color:#8a8a8f}
 .shot img{display:block;width:100%;height:auto;max-width:100%}
 .footnotes{margin-top:22px;display:flex;flex-direction:column;gap:6px;font:13px/1.55 var(--mono);color:var(--muted);max-width:90ch}
+.scatter svg{display:block;width:100%;height:auto}
+.sc-zone{fill:color-mix(in srgb,var(--warn) 9%,transparent)}
+.sc-zt{font:11px var(--mono);fill:var(--warn)}
+.sc-grid{stroke:var(--line);stroke-width:1}
+.sc-ax{font:11px var(--mono);fill:var(--muted)}
+.sc-cap{stroke:var(--warn);stroke-width:1.5;stroke-dasharray:4 4}
+.sc-capt{font:11px var(--mono);fill:var(--warn)}
+.sc-pt{fill:var(--open);stroke:var(--card);stroke-width:2}
+.sc-pt.us{fill:var(--accent);stroke:color-mix(in srgb,var(--accent) 35%,var(--card));stroke-width:5}
+.sc-lbl{font:12px var(--mono);fill:var(--text);paint-order:stroke;stroke:var(--card);stroke-width:5px;stroke-linejoin:round}
+.sc-lbl.us{font:600 13px var(--display);fill:var(--accent)}
+.spec .spec-list{display:flex;flex-direction:column;margin-top:4px}
+.spec-row{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.spec-row span{font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.spec-row b{font:500 14px var(--display);color:var(--ink);text-align:right}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:18px}
+.flow .node{font:500 12px var(--mono);padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.flow .node.hot{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.flow .arr{width:16px;height:1px;background:var(--muted);position:relative}
+.flow .arr::after{content:"";position:absolute;right:-1px;top:-3px;border:3.5px solid transparent;border-left:5px solid var(--muted)}
+.flow.ctl{margin-top:10px}.flow .lbl{font:12px var(--mono);color:var(--muted)}
 /* run */
 pre{margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto;font:13px/1.65 var(--mono);color:var(--ink)}
 .copy{float:right;font:500 12px var(--display);border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:4px 10px;border-radius:6px;cursor:pointer}
@@ -383,11 +443,19 @@ footer li{break-inside:avoid;margin-bottom:6px}
 </div></section>
 
 <section class="ch" id="field"><div class="wrap">
-  <div class="story" style="position:static;max-width:780px">
+  <div class="ch-grid">
+  <div class="story">
     <span class="num">07 · The open field</span>
     <h2>Against everything else built for a 128 GB Mac</h2>
     <p>We surveyed what people have published on Hugging Face for this class of machine. GLM-5.3-Flash is the highest-ranked open model that fits at all, and every other public build of it is either far larger or reports lower fidelity. At an 80 GB budget we found nothing clearly better than GLM 5.3 Flash-sauhard.</p>
     <p>The strongest challenger is a different model: ISTA-DASLab's 3-bit Qwen3.8-Flash-Next, 84 GB, matching its full-precision parent on its authors' task suite. Its base model scores two points lower than the base of GLM 5.3 Flash-sauhard, which is close to noise, so it is the next build we will test head to head.</p>
+  </div>
+  <div class="panel">
+    <h3>Smaller and closer to the original</h3>
+    <p class="sub">Open GLM-5.3-Flash builds · top-1 agreement with the full model, as each author reports it</p>
+    <div class="scatter">${scatter()}</div>
+    <p class="note">Every build that fits a 128 GB Mac reports 71 to 82% agreement; only builds of 157 GB and up reach 88%. Measurement methods differ; see the note under the table.</p>
+  </div>
   </div>
   <div class="panel" style="margin-top:32px">
     <h3>Open builds for 128 GB Macs</h3>
@@ -401,11 +469,25 @@ footer li{break-inside:avoid;margin-bottom:6px}
 </div></section>
 
 <section class="ch" id="run"><div class="wrap">
-  <div class="story" style="position:static;max-width:780px">
+  <div class="ch-grid">
+  <div class="story">
     <span class="num">08 · My setup</span>
     <h2>My setup</h2>
     <p>This is the control panel that runs on the Mac every day. A launchd service keeps it up; one click starts, stops or switches between GLM 5.3 Flash-sauhard and a tuned Qwen3.8-Flash-Next, and any OpenAI- or Anthropic-compatible client can use the model, Claude Code included.</p>
     <p>GLM 5.3 Flash-sauhard serves at 41.5 tok/s** from 71.5 GB, with the server capped at 84 GB so the editor, builds and Claude Code always have room. Context reaches 128K tokens***.</p>
+  </div>
+  <aside class="panel spec">
+    <h3>The rig</h3>
+    <p class="sub">Everything runs on one laptop, offline</p>
+    <div class="spec-list">${specRows}</div>
+    <div class="flow" aria-label="Request path">
+      <span class="node">Claude Code</span><span class="arr"></span>
+      <span class="node">API :8080</span><span class="arr"></span>
+      <span class="node">MLX server</span><span class="arr"></span>
+      <span class="node hot">GLM 5.3 Flash-sauhard</span>
+    </div>
+    <div class="flow ctl"><span class="node">Dashboard :8090</span><span class="lbl">starts, stops, switches, watches memory</span></div>
+  </aside>
   </div>
   <figure class="shot">
     <div class="chrome"><i></i><i></i><i></i><span>127.0.0.1:8090</span></div>
