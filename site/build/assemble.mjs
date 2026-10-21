@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { ISO_CSS } from "../vendor/anatomy/kit/iso-kit.mjs";
 import { kitScript } from "../vendor/anatomy/scripts/inline-kit.mjs";
 import * as scale from "./fig-scale.mjs";
@@ -119,6 +119,7 @@ const SPEC = [
 ];
 const specRows = SPEC.map(([k, v]) => `<div class="spec-row"><span>${k}</span><b>${v}</b></div>`).join("");
 
+const LOGO = readFileSync(new URL("../public/favicon.svg", import.meta.url), "utf8").replace("<svg ", '<svg class="logo" aria-hidden="true" ');
 const page = `<title>GLM 5.3 Flash-sauhard</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -304,6 +305,8 @@ tr.us-row td b{color:var(--accent)}
 .flow .arr{width:16px;height:1px;background:var(--muted);position:relative}
 .flow .arr::after{content:"";position:absolute;right:-1px;top:-3px;border:3.5px solid transparent;border-left:5px solid var(--muted)}
 .flow.ctl{margin-top:10px}.flow .lbl{font:12px var(--mono);color:var(--muted)}
+.brandline{display:flex;align-items:center;gap:12px}
+.brandline .logo{width:34px;height:34px;flex:none}
 /* run */
 pre{margin:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto;font:13px/1.65 var(--mono);color:var(--ink)}
 .copy{float:right;font:500 12px var(--display);border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:4px 10px;border-radius:6px;cursor:pointer}
@@ -329,7 +332,7 @@ footer li{break-inside:avoid;margin-bottom:6px}
 </ul></nav>
 
 <header class="hero"><div class="wrap">
-  <p class="eyebrow">GLM 5.3 Flash-sauhard · MacBook Pro M5 Max · 128 GB · MLX</p>
+  <p class="eyebrow brandline">${LOGO}<span>GLM 5.3 Flash-sauhard · MacBook Pro M5 Max · 128 GB · MLX</span></p>
   <h1 style="margin-top:20px">321 billion parameters.<br><span class="q">One laptop.</span> Room to keep working.</h1>
   <p class="lede">GLM-5.3-Flash ships as a 305 GB checkpoint. We rebuilt it for one machine as <b class="name">GLM 5.3 Flash-sauhard</b>: <b>calibrated on real coding, agent and math work, pruned to the experts it needs, given a bit width per tensor and refit scale by scale</b>. GLM 5.3 Flash-sauhard runs offline in 71.6 GB and leaves the rest of the Mac to you. The model it is built from edges out Claude Sonnet 5.5 at medium effort on the Artificial Analysis index.</p>
   <div class="numbers">
@@ -561,7 +564,7 @@ document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("clic
 const split = page.indexOf('<nav aria-label="Chapters">');
 const DESC = "How GLM 5.3 Flash-sauhard fits the 321B GLM-5.3-Flash into 71.6 GB on a 128 GB MacBook Pro M5 Max: calibration, expert pruning, mixed-precision LSQ quantization, and how it compares.";
 const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="${DESC}"><meta property="og:title" content="GLM 5.3 Flash-sauhard"><meta property="og:description" content="${DESC}"><meta name="twitter:card" content="summary">
+<meta name="description" content="${DESC}"><meta property="og:type" content="website"><meta property="og:url" content="https://glm-flash-sauhard.vercel.app/"><meta property="og:site_name" content="GLM 5.3 Flash-sauhard"><meta property="og:title" content="GLM 5.3 Flash-sauhard"><meta property="og:description" content="${DESC}"><meta property="og:image" content="https://glm-flash-sauhard.vercel.app/og.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="GLM 5.3 Flash-sauhard: a 321B model rebuilt to run offline in 71.6 GB on a 128 GB MacBook Pro."><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="GLM 5.3 Flash-sauhard"><meta name="twitter:description" content="${DESC}"><meta name="twitter:image" content="https://glm-flash-sauhard.vercel.app/og.png"><link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><meta name="theme-color" content="#0b0b0b">
 ${page.slice(0, split)}</head><body>${page.slice(split)}</body></html>`;
 writeFileSync(new URL("../public/index.html", import.meta.url), doc);
 console.log("wrote public/index.html", doc.length);
