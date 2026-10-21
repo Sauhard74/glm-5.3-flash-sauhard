@@ -25,6 +25,13 @@ import mlx_vlm.models.glm5_next.language as _glm_lang  # noqa: E402
 
 _glm_lang._MAX_PROJECTED_PREFILL_TOKENS = int(os.environ.get("GLM_MAX_PROJECTED_PREFILL", "0"))
 
+# With it disabled the projected cache stays empty (keys None), which BatchKVCache.extract cannot slice when the
+# server splits a finished request out of the batch; an empty cache is what it holds (merge() accepts those).
+from mlx_vlm.models import cache as _cache  # noqa: E402
+
+_extract = _cache.BatchKVCache.extract
+_cache.BatchKVCache.extract = lambda self, idx: _cache.KVCache() if self.keys is None else _extract(self, idx)
+
 from mlx_vlm.server import app as server_app  # noqa: E402
 from mlx_vlm.server.cli import main  # noqa: E402
 from starlette.responses import JSONResponse  # noqa: E402
