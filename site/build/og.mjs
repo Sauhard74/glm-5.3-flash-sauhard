@@ -29,7 +29,7 @@ p{margin:0;font-size:25px;line-height:1.35;color:#b4b4b8;max-width:500px}
     <div class="stats">
       <div><b>71.6 GB</b><span>resident</span></div>
       <div><b>92.4%</b><span>matches original</span></div>
-      <div><b>41.5</b><span>tok/s</span></div>
+      <div><b>30</b><span>tok/s</span></div>
     </div>
   </div>
   <div class="fig iso" data-theme="dark" id="fig-scale">${scale.html}</div>

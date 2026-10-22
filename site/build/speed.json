@@ -1,0 +1,53 @@
+{
+ "server": [
+  {
+   "prompt_tokens": 75,
+   "generated_tokens": 1200,
+   "prefill_tps": 52.3,
+   "decode_tps": 24.4
+  },
+  {
+   "prompt_tokens": 880,
+   "generated_tokens": 1200,
+   "prefill_tps": 240.0,
+   "decode_tps": 28.2
+  },
+  {
+   "prompt_tokens": 6795,
+   "generated_tokens": 1200,
+   "prefill_tps": 449.2,
+   "decode_tps": 38.4
+  },
+  {
+   "prompt_tokens": 27130,
+   "generated_tokens": 1200,
+   "prefill_tps": 517.6,
+   "decode_tps": 26.8
+  }
+ ],
+ "harness": [
+  {
+   "ctx": 1024,
+   "prefill_tps": 625.75,
+   "ttft_s": 1.6221,
+   "decode_tps": 31.56,
+   "peak_gb": 72.118
+  },
+  {
+   "ctx": 8192,
+   "prefill_tps": 517.01,
+   "ttft_s": 15.8161,
+   "decode_tps": 29.32,
+   "peak_gb": 74.313
+  },
+  {
+   "ctx": 32768,
+   "prefill_tps": 412.58,
+   "ttft_s": 79.1864,
+   "decode_tps": 25.79,
+   "peak_gb": 77.514
+  }
+ ],
+ "harness_decode": 256,
+ "resident_gb": 69.216
+}

@@ -13,7 +13,7 @@
   "glm": {
     "name": "GLM 5.3 Flash-sauhard",
     "detail": "321B GLM-5.3-Flash, calibrated on your workloads: 153 of 288 experts, 3.48-bit LSQ. Highest quality.",
-    "model": "models/glm-5.3-flash-custom",
+    "model": "models/glm-5.3-flash-sauhard",
     "drafter": "",
     "mtp": true,
     "draft_block": 3,
