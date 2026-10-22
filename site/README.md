@@ -16,5 +16,7 @@ node site/build/pages.mjs                    # public/report/ and public/run/ fr
 node site/build/test-page.mjs fig-case       # one figure alone, for checking (writes build/out-*.html)
 python3 site/build/logo.py                   # favicon.svg + build/out-icon.html (screenshot -> icon PNGs)
 node site/build/og.mjs                       # build/out-og.html, 1200x630; screenshot it to public/og.png
+node site/build/video.mjs                    # build/out-video.html: the 59 s launch cut on a virtual clock
+CHROME_PATH=... node --experimental-websocket site/build/record.mjs <frames-dir> site/public/launch.mp4
 cd site/public && vercel --prod              # deploy (project is linked in public/.vercel, not committed)
 ```
