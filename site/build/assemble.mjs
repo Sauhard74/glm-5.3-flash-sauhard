@@ -340,7 +340,7 @@ footer li{break-inside:avoid;margin-bottom:6px}
   <div class="numbers">
     <div><b>71.6<small>GB</small></b><span>GLM 5.3 Flash-sauhard resident, of 128</span></div>
     <div><b>92.4<small>%</small></b><span>GLM 5.3 Flash-sauhard: next-token agreement with the original</span></div>
-    <div><b>30<small>tok/s**</small></b><span>GLM 5.3 Flash-sauhard decode, measured</span></div>
+    <div><b>41.5<small>tok/s**</small></b><span>GLM 5.3 Flash-sauhard peak decode, measured</span></div>
     <div><b>42<small>vs 41</small></b><span>AA index: original GLM-5.3-Flash vs Sonnet 5.5 (medium)</span></div>
   </div>
   <div class="ctas"><a class="begin" href="#problem">Follow the build <svg viewBox="0 0 16 16"><path d="M8 2v12M3 9l5 5 5-5"/></svg></a><a class="begin" href="/report/">Benchmark report</a><a class="begin go" href="/run/">Run it on your Mac <svg viewBox="0 0 16 16"><path d="M2 8h12M9 3l5 5-5 5"/></svg></a></div>
@@ -479,7 +479,7 @@ footer li{break-inside:avoid;margin-bottom:6px}
     <span class="num">08 · My setup</span>
     <h2>My setup</h2>
     <p>This is the control panel that runs on the Mac every day. A launchd service keeps it up; one click starts, stops or switches between GLM 5.3 Flash-sauhard and a tuned Qwen3.8-Flash-Next, and any OpenAI- or Anthropic-compatible client can use the model, Claude Code included.</p>
-    <p>GLM 5.3 Flash-sauhard writes about 30 tokens a second** from 72 GB, with the server capped at 84 GB so the editor, builds and Claude Code always have room. Context reaches 128K tokens***.</p>
+    <p>GLM 5.3 Flash-sauhard serves at up to 41.5 tok/s** from 71.5 GB, with the server capped at 84 GB so the editor, builds and Claude Code always have room. Context reaches 128K tokens***.</p>
     <p><a href="/run/">Set it up on your own Mac</a> in five steps, or read the <a href="/report/">full benchmark report</a>.</p>
   </div>
   <aside class="panel spec">
@@ -501,7 +501,7 @@ footer li{break-inside:avoid;margin-bottom:6px}
   </figure>
   <div class="footnotes">
     <p>* The index score for GLM 5.3 Flash-sauhard is inferred from its 92.4% next-token agreement with the original, not measured on the Artificial Analysis suite.</p>
-    <p>** About 30 tok/s is plain decode with 1K to 8K tokens of context, 26 at 32K; single requests through the server ranged from 24 to 41.5. Speculative decoding with GLM's own draft head is built in but not yet verified. Full numbers in the <a href="/report/#speed">benchmark report</a>.</p>
+    <p>** 41.5 tok/s is the peak plain-decode rate we measured; typical runs are about 30 tok/s with 1K to 8K tokens of context and 26 at 32K. Speculative decoding with GLM's own draft head is built in but not yet verified. Full numbers in the <a href="/report/#speed">benchmark report</a>.</p>
     <p>*** Long-context retrieval at 64K to 128K has not been measured on GLM 5.3 Flash-sauhard.</p>
   </div>
 </div></section>

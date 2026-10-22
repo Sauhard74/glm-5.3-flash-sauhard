@@ -49,5 +49,12 @@
   }
  ],
  "harness_decode": 256,
- "resident_gb": 69.216
+ "resident_gb": 69.216,
+ "peak": {
+  "prompt_tokens": 108,
+  "generated_tokens": 478,
+  "prefill_tps": 108.1,
+  "decode_tps": 41.5,
+  "when": "2026-10-21 09:20"
+ }
 }

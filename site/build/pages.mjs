@@ -41,7 +41,7 @@ const DOM = { reasoning: "Reasoning / math", code: "Code", agentic: "Agentic, mu
 const domRows = Object.entries(B.domains).map(([d, v]) => `<tr><td>${DOM[d]}</td><td class="n">${v.samples}</td><td class="n">${v.tokens.toLocaleString("en-US")}</td><td class="n">${v.median_kl.toFixed(3)}</td><td class="n">${v.mean_kl.toFixed(3)}</td><td class="n">${pct(v.top1_agree)}%</td></tr>`).join("");
 
 const ctxRows = S.harness.map((r) => `<tr><td class="n">${r.ctx.toLocaleString("en-US")}</td><td class="n">${r.prefill_tps.toFixed(0)}</td><td class="n">${r.ttft_s.toFixed(1)} s</td><td class="n">${r.decode_tps.toFixed(1)}</td><td class="n">${r.peak_gb.toFixed(1)} GB</td></tr>`).join("");
-const srvRows = S.server.map((r) => `<tr><td class="n">${r.prompt_tokens.toLocaleString("en-US")}</td><td class="n">${r.generated_tokens}</td><td class="n">${r.prefill_tps.toFixed(0)}</td><td class="n best">${r.decode_tps.toFixed(1)}</td></tr>`).join("");
+const srvRows = [{ ...S.peak, peak: true }, ...S.server].map((r) => `<tr><td class="n">${r.prompt_tokens.toLocaleString("en-US")}</td><td class="n">${r.generated_tokens}</td><td class="n">${r.prefill_tps.toFixed(0)}</td><td class="n best">${r.decode_tps.toFixed(1)}${r.peak ? " <small>peak</small>" : ""}</td></tr>`).join("");
 
 const report = page({
   path: "/report/",
