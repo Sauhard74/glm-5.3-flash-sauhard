@@ -12,3 +12,4 @@ results/*/
 tests/fixtures/tokenizers/
 control/control_token
 control/api_key
+.env
