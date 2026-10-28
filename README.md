@@ -3,13 +3,17 @@
 GLM-5.3-Flash (321B mixture-of-experts) rebuilt to run on a 128 GB Apple Silicon Mac in 71.6 GB, with room left to
 work. This repo holds the server, the control dashboard, and every step that made the weights.
 
+It reads images too: the original BF16 vision tower is included (+1.13 GB, 73–76 GB resident during image requests),
+and both APIs accept them (OpenAI `image_url` parts, Anthropic `image` blocks). Vision is spot-checked, not
+benchmarked; see the [model card](https://huggingface.co/Sauhard74/GLM-5.3-Flash-sauhard-MLX).
+
 - Write-up: https://glm-flash-sauhard.vercel.app
 - Benchmarks: https://glm-flash-sauhard.vercel.app/report/
 - Weights: https://huggingface.co/Sauhard74/GLM-5.3-Flash-sauhard-MLX
 
 ## Run it
 
-Needs an Apple Silicon Mac with 128 GB of unified memory, macOS 14+, and 75 GB of free disk.
+Needs an Apple Silicon Mac with 128 GB of unified memory, macOS 14+, and 80 GB of free disk.
 
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -55,6 +59,14 @@ uv run python -m calib.run --model glm --src models/src-glm-5.3-flash --data art
 uv run python -m build.make --model glm --src models/src-glm-5.3-flash --calib artifacts/glm/calib \
   --prune 153 --score reap --budget-gb 76 --drop-vision --rounding lsq --out models/glm-5.3-flash-sauhard
 uv run python -m evals.kl --model models/glm-5.3-flash-sauhard
+```
+
+`--drop-vision` keeps the build text-only. The published weights add the original vision tower back, unquantized,
+as a new directory that symlinks the language weights:
+
+```sh
+uv run python -m build.add_vision --src models/src-glm-5.3-flash --base models/glm-5.3-flash-sauhard \
+  --out models/glm-5.3-flash-sauhard-vl
 ```
 
 ## License

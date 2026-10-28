@@ -137,7 +137,7 @@ const step = (n, title, body, cmd) => `<li class="step"><div class="sn">${n}</di
 const run = page({
   path: "/run/",
   title: "Run GLM 5.3 Flash-sauhard on your Mac",
-  desc: "Set up GLM 5.3 Flash-sauhard on a 128 GB Apple Silicon Mac in five steps: download the 71 GB MLX weights, start the server, and connect Claude Code or any OpenAI-compatible app.",
+  desc: "Set up GLM 5.3 Flash-sauhard on a 128 GB Apple Silicon Mac in five steps: download the 72 GB MLX weights, start the server, and connect Claude Code or any OpenAI-compatible app.",
   css: `.reqs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:36px}
 .reqs div{background:var(--card);padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .reqs b{font:600 20px var(--display);color:var(--ink)} .reqs span{font:12px/1.45 var(--mono);color:var(--muted)}
@@ -160,7 +160,7 @@ dt{font:600 17px var(--display);color:var(--ink)} dd{margin:4px 0 0;font-size:17
   <div class="reqs">
     <div><b>Apple Silicon</b><span>M-series Mac; tested on M5 Max</span></div>
     <div><b>128 GB</b><span>unified memory; 96 GB is too tight</span></div>
-    <div><b>75 GB</b><span>free disk for the weights</span></div>
+    <div><b>80 GB</b><span>free disk for the weights</span></div>
     <div><b>macOS 14+</b><span>with Xcode command-line tools</span></div>
   </div>
 </div></section>
@@ -172,9 +172,9 @@ dt{font:600 17px var(--display);color:var(--ink)} dd{margin:4px 0 0;font-size:17
 git clone ${REPO}.git
 cd glm-5.3-flash-sauhard
 uv sync`)}
-  ${step(2, "Download the weights", `<p>71 GB from Hugging Face. The download resumes if it is interrupted; run the same command again.</p>`,
+  ${step(2, "Download the weights", `<p>72 GB from Hugging Face, including the 1.1 GB vision tower. The download resumes if it is interrupted; run the same command again.</p>`,
     `uv run hf download ${HF} --local-dir ${MODEL}`)}
-  ${step(3, "Start the server", `<p>Serves the OpenAI API (<code>/v1/chat/completions</code>) and the Anthropic API (<code>/v1/messages</code>) on port 8080, capped at 84 GB. Loading takes a minute or two; the vision warning in the log is expected, since this build is text-only.</p>`,
+  ${step(3, "Start the server", `<p>Serves the OpenAI API (<code>/v1/chat/completions</code>) and the Anthropic API (<code>/v1/messages</code>) on port 8080, capped at 84 GB. Loading takes a minute or two. Both APIs take images as well as text.</p>`,
     `<span class="c"># a key so only your apps can use the server</span>
 openssl rand -hex 24 > control/api_key
 CAP_GB=84 MTP=0 scripts/quickserve.sh ${MODEL}`)}
@@ -195,6 +195,7 @@ CAP_GB=84 MTP=0 scripts/quickserve.sh ${MODEL}`)}
     <div class="panel"><h3>API key</h3><p class="sub" style="margin:0">contents of control/api_key</p></div>
   </div>
   <p class="note">Recommended sampling: temperature 1.0, top-p 0.95. The model thinks before it answers, so allow at least 2,000 output tokens.</p>
+  <p class="note">Images: send an <code>image_url</code> content part (OpenAI) or an <code>image</code> block (Anthropic, base64 or URL). A 1200×630 image costs about 1,000 prompt tokens and a tall 1600×2241 screenshot about 4,700; one image is at most about 8K tokens. Memory rises to 73–76 GB while images are processed.</p>
 </div></section>
 
 <section class="sec"><div class="wrap">
@@ -208,7 +209,7 @@ scripts/install-control.sh --uninstall <span class="c"># remove it</span></pre><
   <div class="sec-head"><span class="num">If something goes wrong</span><h2>Troubleshooting</h2></div>
   <dl>
     <div><dt>The server is killed while loading, or the Mac swaps heavily</dt><dd>Close large apps (browsers with many tabs, Docker, other models) before starting. The model needs about 72 GB resident; macOS kills a process that pushes memory pressure too high.</dd></div>
-    <div><dt>"model not found" or the model loads twice</dt><dd>The <code>model</code> field in requests must match the path passed to <code>quickserve.sh</code> exactly.</dd></div>
+    <div><dt>"model not found" or the model loads twice</dt><dd>Send the path passed to <code>quickserve.sh</code> as the <code>model</code> field. The server answers every text request with the model it was started with, so a different name no longer loads a second copy; update the repo if yours predates that.</dd></div>
     <div><dt>Slow first reply</dt><dd>The first request after loading warms the Metal kernels. Long prompts prefill at about ${Math.round(S.harness[0].prefill_tps / 10) * 10} tokens per second, so a 30K-token codebase takes about a minute; repeated prefixes are cached.</dd></div>
     <div><dt>401 from the server</dt><dd>Send the key as <code>Authorization: Bearer …</code> (OpenAI style) or <code>x-api-key</code> (Anthropic style).</dd></div>
   </dl>
@@ -226,7 +227,9 @@ uv run python -m calib.run --model glm --src models/src-glm-5.3-flash --data art
 uv run python -m build.make --model glm --src models/src-glm-5.3-flash --calib artifacts/glm/calib \\
   --prune 153 --score reap --budget-gb 76 --drop-vision --rounding lsq --out ${MODEL}
 <span class="c"># 5. check it against the original</span>
-uv run python -m evals.kl --model ${MODEL}</pre></div>
+uv run python -m evals.kl --model ${MODEL}
+<span class="c"># 6. optional: add the original BF16 vision tower back (1.13 GB, unquantized)</span>
+uv run python -m build.add_vision --src models/src-glm-5.3-flash --base ${MODEL} --out ${MODEL}-vl</pre></div>
   <p class="note">Change <code>--budget-gb</code> for a smaller or larger build, or edit <code>calib_data/recipes.py</code> to calibrate on a different mix of work.</p>
 </div></section>`,
 });
