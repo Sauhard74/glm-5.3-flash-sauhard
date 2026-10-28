@@ -7,4 +7,8 @@ export ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_AUTH_TOKEN:-$(cat "$(dirname "$0")/../c
 export ANTHROPIC_MODEL="$MODEL_ID" ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL_ID" CLAUDE_CODE_SUBAGENT_MODEL="$MODEL_ID"
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-131072}"
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
+# Reading a ~40K-token Claude Code prompt cold takes 2-3 min with no bytes sent; the default timeout retries mid-prefill.
+export API_TIMEOUT_MS="${API_TIMEOUT_MS:-1800000}"
+# Its first system line carries a per-session hash (cc_version=X.Y.Z.<hash>) that defeats prefix reuse across sessions.
+export CLAUDE_CODE_ATTRIBUTION_HEADER=0
 exec claude "$@"

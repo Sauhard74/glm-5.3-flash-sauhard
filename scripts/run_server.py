@@ -32,6 +32,9 @@ from mlx_vlm.models import cache as _cache  # noqa: E402
 _extract = _cache.BatchKVCache.extract
 _cache.BatchKVCache.extract = lambda self, idx: _cache.KVCache() if self.keys is None else _extract(self, idx)
 
+# Shared-prefix checkpoints, weights-keyed disk namespace, whole-root disk cap (see prompt_cache.py).
+import prompt_cache  # noqa: E402,F401
+
 from mlx_vlm.server import app as server_app  # noqa: E402
 from mlx_vlm.server.cli import main  # noqa: E402
 from starlette.responses import JSONResponse  # noqa: E402

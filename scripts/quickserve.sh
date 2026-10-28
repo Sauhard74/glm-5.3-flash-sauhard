@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Usage: scripts/quickserve.sh [model_dir] — OpenAI (/v1/chat/completions) + Anthropic (/v1/messages) on :8080
-# Env: MTP=1|0, DRAFTER, DRAFT_BLOCK, CAP_GB, WIRE_GB, CACHE_GB, PREFILL, PORT, APC_MEMORY_MAX_GB, APC_DISK_MAX_GB
+# Env: MTP=1|0, DRAFTER, DRAFT_BLOCK, CAP_GB, WIRE_GB, CACHE_GB, PREFILL, PORT,
+#      APC_ENABLED=1|0 (prefix cache), APC_DISK_ENABLED=1|0 (its SSD tier, ~/.cache/mlx-vlm/apc or APC_DISK_PATH),
+#      APC_MEMORY_MAX_GB, APC_DISK_MAX_GB (per model), APC_DISK_TOTAL_GB (all models), APC_SHARED_PREFIX (tokens, 0 = off)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MODEL="${1:-models/qwen-flash-next-reap288}"
 
 export CAP_GB="${CAP_GB:-80}" WIRE_GB="${WIRE_GB:-0}" CACHE_GB="${CACHE_GB:-2}"
-export APC_ENABLED=1 APC_MEMORY_MAX_GB="${APC_MEMORY_MAX_GB:-6}" APC_DISK_MAX_GB="${APC_DISK_MAX_GB:-40}"
+export APC_ENABLED="${APC_ENABLED:-1}" APC_MEMORY_MAX_GB="${APC_MEMORY_MAX_GB:-6}" APC_DISK_MAX_GB="${APC_DISK_MAX_GB:-40}"
+export APC_DISK_TOTAL_GB="${APC_DISK_TOTAL_GB:-80}" APC_SHARED_PREFIX="${APC_SHARED_PREFIX:-2048}"
 export APC_CHECKPOINT_ENTRIES=2 HF_HUB_OFFLINE=1
 [[ -z "${MLX_VLM_SERVER_API_KEY:-}" && -f control/api_key ]] && export MLX_VLM_SERVER_API_KEY="$(cat control/api_key)"
 
