@@ -4,7 +4,9 @@ mlx-vlm wires up to max_recommended_working_set_size (~107 GiB) on every generat
 every set_wired_limit call to WIRE_GB (0 = no wiring) and set a soft memory/cache limit.
 """
 
+import logging
 import os
+import sys
 
 import mlx.core as mx
 
@@ -34,6 +36,29 @@ _cache.BatchKVCache.extract = lambda self, idx: _cache.KVCache() if self.keys is
 
 # Shared-prefix checkpoints, weights-keyed disk namespace, whole-root disk cap (see prompt_cache.py).
 import prompt_cache  # noqa: E402,F401
+
+# One model per server. Stock swaps models on any request naming another one, and the old one stays resident while
+# its in-flight request drains: a client asking for a different name loaded a second 72 GB copy (142 GB, deep swap).
+# Every text-generation request is served by the model the server was started with, whatever name it sends.
+import importlib  # noqa: E402
+
+_app = importlib.import_module("mlx_vlm.server.app")  # the module; the package's `app` attribute is the FastAPI app
+_argv = sys.argv[1:]
+PINNED = _argv[_argv.index("--model") + 1] if "--model" in _argv else None
+_get_cached_model = _app.get_cached_model
+
+
+def _pinned_get_cached_model(model_path, *args, model_kind="auto", **kwargs):
+    if PINNED and model_kind in ("auto", "text_generation") and model_path != PINNED:
+        logging.getLogger("mlx_vlm").info("Request named %s; serving the pinned model %s", model_path, PINNED)
+        model_path = PINNED
+    return _get_cached_model(model_path, *args, model_kind=model_kind, **kwargs)
+
+
+if PINNED:  # routes resolve it at call time, package attribute first (app._server_package_attr)
+    import mlx_vlm.server as _server  # noqa: E402
+
+    _app.get_cached_model = _server.get_cached_model = _pinned_get_cached_model
 
 from mlx_vlm.server import app as server_app  # noqa: E402
 from mlx_vlm.server.cli import main  # noqa: E402
